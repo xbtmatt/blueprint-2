@@ -26,7 +26,7 @@ async function main() {
     // const selections = await userInputs();
     const selections: Selections = {
         configPath: "./tests/config.yaml",
-        additionalModules: [ AccountAddress.fromRelaxed("0x74007b85705153d40b88f994876fd2f7e12204f79527b44f71e69a9d34644f18") ],
+        additionalModules: [ AccountAddress.fromRelaxed("0xabcde341afbc4d846a4453bf042dffe74a137c0f0b50c548a87f726f4b1d62ed") ],
         frameworkModules: [ AccountAddress.ONE, AccountAddress.THREE, AccountAddress.FOUR ], 
         // frameworkModules: [],
         network: Network.LOCAL,

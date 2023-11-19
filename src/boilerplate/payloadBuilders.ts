@@ -35,7 +35,7 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
   public abstract readonly secondarySenders?: Array<AccountAddress>;
   public abstract readonly feePayer?: AccountAddress;
 
-  toPayload(multisigAddress?: AccountAddress): TransactionPayloadEntryFunction | TransactionPayloadMultisig {
+  createPayload(multisigAddress?: AccountAddress): TransactionPayloadEntryFunction | TransactionPayloadMultisig {
     const entryFunction = new EntryFunction(
       new ModuleId(this.moduleAddress, new Identifier(this.moduleName)),
       new Identifier(this.functionName),
@@ -62,7 +62,7 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
     const rawTransaction = await buildTransaction({
       aptosConfig: aptos.config,
       sender: signer.accountAddress,
-      payload: this.toPayload(),
+      payload: this.createPayload(),
       // TODO: Add support for feepayer transactions
       // /feePayerAddress: options?.feePayerAddress,
     });
@@ -108,7 +108,7 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
   }
 
   serialize(serializer: Serializer): void {
-    this.toPayload().serialize(serializer);
+    this.createPayload().serialize(serializer);
   }
 }
 
