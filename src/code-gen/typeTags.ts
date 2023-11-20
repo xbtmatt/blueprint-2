@@ -160,7 +160,7 @@ export function toClassString(typeTagEnum: TypeTagEnum): string {
     case TypeTagEnum.Object:
       return "MoveObject";
     case TypeTagEnum.Signer:
-      return "Signer";
+      return "Account"; // TODO: Extend this to include wallet signer types?
     case TypeTagEnum.Generic:
       return "EntryFunctionArgumentTypes";
     case TypeTagEnum.Struct:

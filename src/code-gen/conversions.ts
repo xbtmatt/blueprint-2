@@ -161,7 +161,7 @@ export const inputTypeMapForEntry: { [key in TypeTagEnum]: string } = {
   Vector: "Array",
   Option: "Option", // OneOrNone<T>
   Object: "ObjectAddress",
-  Signer: "Signer",
+  Signer: "Account",
   Generic: "EntryFunctionArgumentTypes",
   Struct: "Struct",
 };

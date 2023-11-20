@@ -25,34 +25,20 @@ import {
   EntryFunctionPayloadResponse,
   AnyRawTransaction,
   AccountAuthenticator,
+  InputGenerateTransactionOptions,
 } from "@aptos-labs/ts-sdk";
 import { WalletSignTransactionFunction } from "src/types";
 
-export abstract class EntryFunctionPayloadBuilder extends Serializable {
-  public abstract readonly moduleAddress: AccountAddress;
-  public abstract readonly moduleName: string;
-  public abstract readonly functionName: string;
-  public abstract readonly args: any;
-  public abstract readonly typeTags: Array<TypeTag>;
-  public abstract readonly primarySender: AccountAddress;
-  public abstract readonly secondarySenders?: Array<AccountAddress>;
-  public abstract readonly feePayer?: AccountAddress;
-  public abstract readonly aptos: Aptos;
-  public abstract readonly rawTransactionInput: AnyRawTransaction;
+export class EntryFunctionTransactionBuilder {
+  // TODO: Expand these fields instead of using the `payloadBuilder` field?
+  public readonly payloadBuilder: EntryFunctionPayloadBuilder;
+  public readonly aptos: Aptos;
+  public readonly rawTransactionInput: AnyRawTransaction;
 
-  createPayload(multisigAddress?: AccountAddress): TransactionPayloadEntryFunction | TransactionPayloadMultisig {
-    const entryFunction = new EntryFunction(
-      new ModuleId(this.moduleAddress, new Identifier(this.moduleName)),
-      new Identifier(this.functionName),
-      this.typeTags,
-      this.argsToArray(),
-    );
-    const entryFunctionPayload = new TransactionPayloadEntryFunction(entryFunction);
-    if (multisigAddress) {
-      const multisigPayload = new MultisigTransactionPayload(entryFunction);
-      return new TransactionPayloadMultisig(new MultiSig(multisigAddress, multisigPayload));
-    }
-    return entryFunctionPayload;
+  constructor(payloadBuilder: EntryFunctionPayloadBuilder, aptos: Aptos, rawTransactionInput: AnyRawTransaction) {
+    this.payloadBuilder = payloadBuilder;
+    this.aptos = aptos;
+    this.rawTransactionInput = rawTransactionInput;
   }
 
   /**
@@ -61,7 +47,7 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
    * @param asFeePayer whether or not the signer is the fee payer
    * @returns a Promise<AccountAuthenticator>
    */
-  sign(signer: Account | WalletSignTransactionFunction, asFeePayer?: boolean): Promise<AccountAuthenticator> {
+  async sign(signer: Account | WalletSignTransactionFunction, asFeePayer?: boolean): Promise<AccountAuthenticator> {
     if (signer instanceof Account) {
       const accountAuthenticator = this.aptos.signTransaction({
         signer,
@@ -73,12 +59,14 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
     return signer(this.rawTransactionInput, asFeePayer);
   }
 
-  async submit(
-    primarySigner: Account | WalletSignTransactionFunction | AccountAuthenticator,
-    secondarySigners?: Array<Account | WalletSignTransactionFunction | AccountAuthenticator>,
-    feePayer?: Account | WalletSignTransactionFunction,
-    options?: WaitForTransactionOptions,
-  ): Promise<UserTransactionResponse> {
+  // To be used by a static `submit` where the user enters named signer arguments
+  async submit(args: {
+    primarySigner: Account | WalletSignTransactionFunction | AccountAuthenticator;
+    secondarySigners?: Array<Account | WalletSignTransactionFunction | AccountAuthenticator>;
+    feePayer?: Account | WalletSignTransactionFunction | AccountAuthenticator;
+    options?: WaitForTransactionOptions;
+  }): Promise<UserTransactionResponse> {
+    const { primarySigner, secondarySigners, feePayer, options } = args;
     let primarySenderAuthenticator: AccountAuthenticator;
     let secondarySendersAuthenticators: Array<AccountAuthenticator> | undefined;
     let feePayerAuthenticator: AccountAuthenticator | undefined;
@@ -128,33 +116,6 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
     return userTransactionResponse as UserTransactionResponse;
   }
 
-  // You can only submit a regular transaction with this function.
-  // if you wish to submit this payload as a multisig transaction for `multisig_account.move`, please use the `submitMultisig` function.
-  // TODO: Add `submitMultisig` function
-  async submit2(args: {
-    signer: Account;
-    aptos: Aptos;
-    options?: WaitForTransactionOptions;
-  }): Promise<UserTransactionResponse> {
-    const { signer, aptos, options } = args;
-    const rawTransaction = await buildTransaction({
-      aptosConfig: aptos.config,
-      sender: signer.accountAddress,
-      payload: this.createPayload(),
-      // TODO: Add support for feepayer transactions
-      // /feePayerAddress: options?.feePayerAddress,
-    });
-    const pendingTransaction = await aptos.signAndSubmitTransaction({
-      signer: signer,
-      transaction: rawTransaction,
-    });
-    const userTransactionResponse = await aptos.waitForTransaction({
-      transactionHash: pendingTransaction.hash,
-      options,
-    });
-    return userTransactionResponse as UserTransactionResponse;
-  }
-
   /**
    * Helper function to print out relevant transaction info with an easy way to filter out fields
    * @param response The transaction response for a user submitted transaction
@@ -180,10 +141,61 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
       ...keysToPrint,
     };
   }
+}
+
+export abstract class EntryFunctionPayloadBuilder extends Serializable {
+  public abstract readonly moduleAddress: AccountAddress;
+  public abstract readonly moduleName: string;
+  public abstract readonly functionName: string;
+  public abstract readonly args: any;
+  public abstract readonly typeTags: Array<TypeTag>;
+  public abstract readonly primarySender: AccountAddress;
+  public abstract readonly secondarySenders?: Array<AccountAddress>;
+  public abstract readonly feePayer?: AccountAddress;
+
+  createPayload(multisigAddress?: AccountAddress): TransactionPayloadEntryFunction | TransactionPayloadMultisig {
+    const entryFunction = new EntryFunction(
+      new ModuleId(this.moduleAddress, new Identifier(this.moduleName)),
+      new Identifier(this.functionName),
+      this.typeTags,
+      this.argsToArray(),
+    );
+    const entryFunctionPayload = new TransactionPayloadEntryFunction(entryFunction);
+    if (multisigAddress) {
+      const multisigPayload = new MultisigTransactionPayload(entryFunction);
+      return new TransactionPayloadMultisig(new MultiSig(multisigAddress, multisigPayload));
+    }
+    return entryFunctionPayload;
+  }
 
   argsToArray(): Array<EntryFunctionArgumentTypes> {
     return Object.keys(this.args).map((field) => this.args[field as keyof typeof this.args]);
   }
+
+  // TODO: Finish later.
+  //  the undefined/optional inputs for buildTransaction have changed so we can't do it as easily as before
+  // protected async toTransactionBuilder(args: {
+  //   aptosConfig: AptosConfig,
+  //   primarySender: AccountAddress,
+  //   secondarySenders?: Array<AccountAddress>,
+  //   args: any,
+  //   feePayer?: AccountAddress,
+  //   typeTags?: Array<TypeTag>,
+  //   options?: InputGenerateTransactionOptions,
+  // }): EntryFunctionTransactionBuilder {
+  //   const { aptosConfig, primarySender, secondarySenders, args, feePayer, typeTags, options } = args;
+  //   const aptos = new Aptos(aptosConfig);
+  //   const rawTransactionInput = await buildTransaction({
+  //     payload: this.createPayload(),
+  //     sender: primarySender,
+  //     secondarySignerAddresses: secondarySenders ?? [],
+  //     feePayerAddress: feePayer ?? undefined,
+  //     args,
+  //     typeTags,
+  //     options,
+  //   });
+  //   return new EntryFunctionTransactionBuilder(this, aptos, rawTransactionInput);
+  // }
 
   serialize(serializer: Serializer): void {
     this.createPayload().serialize(serializer);
