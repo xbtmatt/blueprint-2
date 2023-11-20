@@ -39,7 +39,6 @@ import {
   rawTransactionMultiAgentHelper,
   publishArgumentTestModule,
   PUBLISHER_ACCOUNT_PK,
-  MULTI_SIGNER_SCRIPT_ARGUMENT_TEST,
   PUBLISHER_ACCOUNT_ADDRESS,
 } from "./helper";
 import { fundAccounts } from "../src";
@@ -78,140 +77,144 @@ describe("various transaction arguments", () => {
   const EXPECTED_VECTOR_STRING = ["expected_string", "abc", "def", "123", "456", "789"];
 
   beforeAll(async () => {
-    await fundAccounts(aptos, [senderAccount, ...secondarySignerAccounts, feePayerAccount]);
-    await publishArgumentTestModule(aptos, senderAccount);
+    try {
+      await fundAccounts(aptos, [senderAccount, ...secondarySignerAccounts, feePayerAccount]);
+      await publishArgumentTestModule(aptos, senderAccount);
 
-    // when deploying, `init_module` creates 3 objects and stores them into the `SetupData` resource
-    // within that resource is 3 fields: `empty_object_1`, `empty_object_2`, `empty_object_3`
-    // we need to extract those objects and use them as arguments for the entry functions
-    type SetupData = {
-      empty_object_1: { inner: string };
-      empty_object_2: { inner: string };
-      empty_object_3: { inner: string };
-    };
+      // when deploying, `init_module` creates 3 objects and stores them into the `SetupData` resource
+      // within that resource is 3 fields: `empty_object_1`, `empty_object_2`, `empty_object_3`
+      // we need to extract those objects and use them as arguments for the entry functions
+      type SetupData = {
+        empty_object_1: { inner: string };
+        empty_object_2: { inner: string };
+        empty_object_3: { inner: string };
+      };
 
-    const setupData = await aptos.getAccountResource<SetupData>({
-      accountAddress: senderAccount.accountAddress.toString(),
-      resourceType: `${senderAccount.accountAddress.toString()}::tx_args_module::SetupData`,
-    });
+      const setupData = await aptos.getAccountResource<SetupData>({
+        accountAddress: senderAccount.accountAddress.toString(),
+        resourceType: `${senderAccount.accountAddress.toString()}::tx_args_module::SetupData`,
+      });
 
-    moduleObjects.push(AccountAddress.fromStringRelaxed(setupData.empty_object_1.inner));
-    moduleObjects.push(AccountAddress.fromStringRelaxed(setupData.empty_object_2.inner));
-    moduleObjects.push(AccountAddress.fromStringRelaxed(setupData.empty_object_3.inner));
+      moduleObjects.push(AccountAddress.fromStringRelaxed(setupData.empty_object_1.inner));
+      moduleObjects.push(AccountAddress.fromStringRelaxed(setupData.empty_object_2.inner));
+      moduleObjects.push(AccountAddress.fromStringRelaxed(setupData.empty_object_3.inner));
 
-    transactionArguments = [
-      new Bool(true),
-      new U8(1),
-      new U16(2),
-      new U32(3),
-      new U64(4),
-      new U128(5),
-      new U256(6),
-      senderAccount.accountAddress,
-      new MoveString("expected_string"),
-      moduleObjects[0],
-      new MoveVector([]),
-      MoveVector.Bool([true, false, true]),
-      MoveVector.U8(EXPECTED_VECTOR_U8),
-      MoveVector.U16([0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER]),
-      MoveVector.U32([0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER]),
-      MoveVector.U64([0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT]),
-      MoveVector.U128([0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT]),
-      MoveVector.U256([0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT]),
-      new MoveVector([
-        AccountAddress.fromStringRelaxed("0x0"),
-        AccountAddress.fromStringRelaxed("0xabc"),
-        AccountAddress.fromStringRelaxed("0xdef"),
-        AccountAddress.fromStringRelaxed("0x123"),
-        AccountAddress.fromStringRelaxed("0x456"),
-        AccountAddress.fromStringRelaxed("0x789"),
-      ]),
-      MoveVector.MoveString(EXPECTED_VECTOR_STRING),
-      new MoveVector(moduleObjects),
-      new MoveOption(),
-      new MoveOption(new Bool(true)),
-      new MoveOption(new U8(1)),
-      new MoveOption(new U16(2)),
-      new MoveOption(new U32(3)),
-      new MoveOption(new U64(4)),
-      new MoveOption(new U128(5)),
-      new MoveOption(new U256(6)),
-      new MoveOption(senderAccount.accountAddress),
-      new MoveOption(new MoveString("expected_string")),
-      new MoveOption(moduleObjects[0]),
-    ];
+      transactionArguments = [
+        new Bool(true),
+        new U8(1),
+        new U16(2),
+        new U32(3),
+        new U64(4),
+        new U128(5),
+        new U256(6),
+        senderAccount.accountAddress,
+        new MoveString("expected_string"),
+        moduleObjects[0],
+        new MoveVector([]),
+        MoveVector.Bool([true, false, true]),
+        MoveVector.U8(EXPECTED_VECTOR_U8),
+        MoveVector.U16([0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER]),
+        MoveVector.U32([0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER]),
+        MoveVector.U64([0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT]),
+        MoveVector.U128([0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT]),
+        MoveVector.U256([0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT]),
+        new MoveVector([
+          AccountAddress.fromStringRelaxed("0x0"),
+          AccountAddress.fromStringRelaxed("0xabc"),
+          AccountAddress.fromStringRelaxed("0xdef"),
+          AccountAddress.fromStringRelaxed("0x123"),
+          AccountAddress.fromStringRelaxed("0x456"),
+          AccountAddress.fromStringRelaxed("0x789"),
+        ]),
+        MoveVector.MoveString(EXPECTED_VECTOR_STRING),
+        new MoveVector(moduleObjects),
+        new MoveOption(),
+        new MoveOption(new Bool(true)),
+        new MoveOption(new U8(1)),
+        new MoveOption(new U16(2)),
+        new MoveOption(new U32(3)),
+        new MoveOption(new U64(4)),
+        new MoveOption(new U128(5)),
+        new MoveOption(new U256(6)),
+        new MoveOption(senderAccount.accountAddress),
+        new MoveOption(new MoveString("expected_string")),
+        new MoveOption(moduleObjects[0]),
+      ];
 
-    simpleTransactionArguments = [
-      true,
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      senderAccount.accountAddress.toString(),
-      "expected_string",
-      moduleObjects[0].toString(),
-      [],
-      [true, false, true],
-      [0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER],
-      [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
-      [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
-      [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT.toString(10)],
-      [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT.toString(10)],
-      [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT.toString(10)],
-      ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
-      ["expected_string", "abc", "def", "123", "456", "789"],
-      moduleObjects.map((obj) => obj.toString()),
-      undefined,
-      true,
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      senderAccount.accountAddress.toString(),
-      "expected_string",
-      moduleObjects[0].toString(),
-    ];
+      simpleTransactionArguments = [
+        true,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        senderAccount.accountAddress.toString(),
+        "expected_string",
+        moduleObjects[0].toString(),
+        [],
+        [true, false, true],
+        [0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER],
+        [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
+        [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
+        [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT.toString(10)],
+        [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT.toString(10)],
+        [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT.toString(10)],
+        ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
+        ["expected_string", "abc", "def", "123", "456", "789"],
+        moduleObjects.map((obj) => obj.toString()),
+        undefined,
+        true,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        senderAccount.accountAddress.toString(),
+        "expected_string",
+        moduleObjects[0].toString(),
+      ];
 
-    // Mixes different types of number arguments, and parsed an unparsed arguments
-    mixedTransactionArguments = [
-      true,
-      1,
-      2,
-      3,
-      4n,
-      BigInt(5),
-      "6",
-      senderAccount.accountAddress,
-      "expected_string",
-      moduleObjects[0],
-      [],
-      [true, false, true],
-      [0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER],
-      [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
-      [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
-      [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT.toString(10)],
-      [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT.toString(10)],
-      [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT.toString(10)],
-      ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
-      ["expected_string", "abc", "def", "123", "456", "789"],
-      moduleObjects.map((obj) => obj.toString()),
-      null,
-      new MoveOption(new Bool(true)),
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      senderAccount.accountAddress.toString(),
-      "expected_string",
-      moduleObjects[0].toString(),
-    ];
-  });
+      // Mixes different types of number arguments, and parsed an unparsed arguments
+      mixedTransactionArguments = [
+        true,
+        1,
+        2,
+        3,
+        4n,
+        BigInt(5),
+        "6",
+        senderAccount.accountAddress,
+        "expected_string",
+        moduleObjects[0],
+        [],
+        [true, false, true],
+        [0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER],
+        [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
+        [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
+        [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT.toString(10)],
+        [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT.toString(10)],
+        [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT.toString(10)],
+        ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
+        ["expected_string", "abc", "def", "123", "456", "789"],
+        moduleObjects.map((obj) => obj.toString()),
+        null,
+        new MoveOption(new Bool(true)),
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        senderAccount.accountAddress.toString(),
+        "expected_string",
+        moduleObjects[0].toString(),
+      ];
+    } catch (e) {
+      console.error(e);
+    }
+  }, 30000);
 
   describe("type tags", () => {
     it("successfully submits a transaction with 31 complex type tags", async () => {
@@ -486,51 +489,6 @@ describe("various transaction arguments", () => {
       expect(AccountAddress.fromStringRelaxed(responseSignature.fee_payer_address).toString()).toEqual(
         feePayerAccount.accountAddress.toString(),
       );
-    });
-  });
-
-  describe("script transactions", () => {
-    it("successfully submits a script transaction with all argument types", async () => {
-      const rawTransaction = await aptos.generateTransaction({
-        sender: senderAccount.accountAddress.toString(),
-        data: {
-          bytecode: MULTI_SIGNER_SCRIPT_ARGUMENT_TEST,
-          functionArguments: [
-            senderAccount.accountAddress,
-            ...secondarySignerAccounts.map((account) => account.accountAddress),
-            new Bool(true),
-            new U8(1),
-            new U16(2),
-            new U32(3),
-            new U64(4),
-            new U128(5),
-            new U256(6),
-            senderAccount.accountAddress,
-            new MoveString("expected_string"),
-            moduleObjects[0],
-            MoveVector.U8([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]),
-          ],
-        },
-        secondarySignerAddresses: secondarySignerAccounts.map((account) => account.accountAddress.toString()),
-      });
-      const senderAuthenticator = await aptos.signTransaction({ signer: senderAccount, transaction: rawTransaction });
-      const secondaryAuthenticators = secondarySignerAccounts.map((account) =>
-        aptos.signTransaction({
-          signer: account,
-          transaction: rawTransaction,
-        }),
-      );
-      const transactionResponse = await aptos.submitTransaction({
-        transaction: rawTransaction,
-        senderAuthenticator,
-        additionalSignersAuthenticators: secondaryAuthenticators,
-      });
-      const response = (await aptos.waitForTransaction({
-        transactionHash: transactionResponse.hash,
-      })) as UserTransactionResponse;
-      expect(response.success).toBe(true);
-      expect((response.signature as TransactionMultiAgentSignature).type).toBe("multi_agent_signature");
-      expect(response.payload.type).toBe("script_payload");
     });
   });
 

@@ -260,6 +260,9 @@ export class CodeGenerator {
     }
     functionArguments.forEach((functionArgument, i) => {
       const inputType = toInputTypeString(functionArgument.typeTagArray, viewFunction);
+      // TODO: Fix option input types. It's just converting them to vectors right now, it should be Option<T>, but the input type
+      // is skipping the Option part too early. This is probably a result of refactoring to typetags a week ago.
+      console.log(functionArgument.typeTagArray.map((s) => s.toString()).join(", "));
       const argComment = ` // ${functionArgument.annotation}`;
       constructorOtherArgs.push(`${fieldNames[i]}: ${inputType}, ${argComment}`);
     });

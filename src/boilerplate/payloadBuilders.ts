@@ -29,6 +29,14 @@ import {
 } from "@aptos-labs/ts-sdk";
 import { WalletSignTransactionFunction } from "src/types";
 
+// Only used in tests right now, since it's cumbersome to check static methods on different class instances with an interface.
+export interface TransactionBuilder {
+  builder: (...args: any[]) => Promise<EntryFunctionTransactionBuilder>;
+  submit: (...args: any[]) => Promise<UserTransactionResponse>;
+  builderWithFeePayer: (...args: any[]) => Promise<EntryFunctionTransactionBuilder>;
+  submitWithFeePayer: (...args: any[]) => Promise<UserTransactionResponse>;
+}
+
 export class EntryFunctionTransactionBuilder {
   // TODO: Expand these fields instead of using the `payloadBuilder` field?
   public readonly payloadBuilder: EntryFunctionPayloadBuilder;

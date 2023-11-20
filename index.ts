@@ -27,11 +27,11 @@ async function main() {
     const selections: Selections = {
         configPath: "./tests/config.yaml",
         additionalModules: [
-            AccountAddress.fromRelaxed("0xabcde341afbc4d846a4453bf042dffe74a137c0f0b50c548a87f726f4b1d62ed"),
+            // AccountAddress.fromRelaxed("0xabcde341afbc4d846a4453bf042dffe74a137c0f0b50c548a87f726f4b1d62ed"),
             AccountAddress.fromRelaxed("0x0a56e8b03118e51cf88140e5e18d1f764e0a1048c23e7c56bd01bd5b76993451"),
         ],
-        frameworkModules: [ AccountAddress.ONE, AccountAddress.THREE, AccountAddress.FOUR ], 
-        // frameworkModules: [],
+        // frameworkModules: [ AccountAddress.ONE, AccountAddress.THREE, AccountAddress.FOUR ], 
+        frameworkModules: [],
         network: Network.LOCAL,
     }
     console.log(selections.configPath);
