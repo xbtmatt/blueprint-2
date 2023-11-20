@@ -83,18 +83,35 @@ export class CodeGenerator {
       className,
       functionArgumentTypeTags,
       displaySignerArgsAsComments,
+      returnValue,
       suppliedFieldNames,
       visibility,
       genericTypeParams,
       documentation,
     } = args;
+    const returnValueAsString =
+      (returnValue.length > 0 ? ": " : "") +
+      returnValue
+        .map((v) => {
+          const typeTag = parseTypeTag(v);
+          const replacedTypeTag = this.config.expandedStructs
+            ? typeTag.toString()
+            : truncatedTypeTagString({
+                typeTag,
+                namedAddresses: this.config.namedAddresses,
+                namedTypeTags: this.config.namedTypeTags,
+              });
+          return replacedTypeTag.toString();
+        })
+        .join(", ");
+
     // These are the parsed type tags from the source code
     const genericTypeTagsString = args.genericTypeTags ?? "";
     const genericTypeTags = genericTypeTagsString
       .split(",")
       .filter((t) => t !== "")
       .map((t) => {
-        return t.split(":")[0];
+        return t.split(":")[0].trim();
       });
 
     // Match the generic type tags with their corresponding generic type params
@@ -129,6 +146,11 @@ export class CodeGenerator {
       functionArgumentTypeTags,
       genericTypeParams,
     );
+    // convert T0, T1, etc to named generic type tags if they exist
+    functionArguments.forEach((functionArgument, i) => {
+      const whichGeneric = `T${i}`;
+      functionArguments[i].annotation = functionArguments[i].annotation.replace(whichGeneric, genericTypeTags[i]);
+    });
     const lines: Array<string> = [];
 
     const argsType = `${className}PayloadMoveArguments`;
@@ -153,14 +175,16 @@ export class CodeGenerator {
     const atleastOneGeneric = (genericTypeTagsString ?? "").length > 0;
     const leftCaret = atleastOneGeneric ? "<" : "";
     const rightCaret = atleastOneGeneric ? ">" : "";
+    const extraDocLine = "*```";
 
     const funcSignatureLines = new Array<string>();
     if (documentation?.displayFunctionSignature) {
-      funcSignatureLines.push("/**");
-      funcSignatureLines.push(viewFunction ? "*  #[view]" : "");
+      const viewFunctionAnnotation = viewFunction ? "\n*  #[view]" : "";
+      funcSignatureLines.push("/**" + "\n" + extraDocLine + viewFunctionAnnotation);
       funcSignatureLines.push(
-        `*  ${visibility == "public" ? visibility : ""} ${viewFunction ? "" : "entry"}` +
-          `fun ${functionName}${leftCaret}${genericTypeTagsString}${rightCaret}(`,
+        `*  ${visibility == "public" ? visibility : ""}${viewFunction ? "" : " entry"}` +
+          ` fun ${functionName}${leftCaret}${genericTypeTagsString}${rightCaret}(` +
+          (functionArguments.length > 0 ? "" : `)${returnValueAsString}`),
       );
       signerArguments.forEach((signerArgument, i) => {
         funcSignatureLines.push(`*     ${signerArgumentNames[i]}: ${signerArgument.annotation},`);
@@ -168,8 +192,8 @@ export class CodeGenerator {
       functionArguments.forEach((functionArgument, i) => {
         funcSignatureLines.push(`*     ${fieldNames[i]}: ${functionArgument.annotation},`);
       });
-      funcSignatureLines.push("*   )");
-      funcSignatureLines.push("**/");
+      const endParenthesis = functionArguments.length > 0 ? `*  )${returnValueAsString}\n` : "";
+      funcSignatureLines.push(endParenthesis + `${extraDocLine}\n**/`);
     }
     const functionSignature = funcSignatureLines.join("\n");
     lines.push(functionSignature);
@@ -177,12 +201,14 @@ export class CodeGenerator {
     const accountAddressInputString = toInputTypeString([new TypeTagAddress()], viewFunction);
     const accountAddressClassString = toClassString(TypeTagEnum.AccountAddress);
 
+    // const viewFunctionReturnTypes = viewFunction ? `<[${returnValue.map((v) => v ).join(', ')}]>` : '';
+
     // ---------- Class fields ---------- //
     const entryOrView = viewFunction ? "View" : "Entry";
     const secondarySenders = signerArguments.slice(1).map((s) => accountAddressClassString);
     const classFields =
       `
-    export class ${className} extends ${entryOrView}FunctionPayloadBuilder {
+    export class ${className} extends ${entryOrView}FunctionPayloadBuilder${""} {
       public readonly moduleAddress = ${MODULE_ADDRESS_FIELD_NAME};
       public readonly moduleName = "${moduleName}";
       public readonly functionName = "${functionName}";
@@ -717,6 +743,7 @@ export class CodeGenerator {
                     functionArgumentTypeTags: typeTags,
                     genericTypeTags: func.genericTypes,
                     viewFunction: func.is_view,
+                    returnValue: func.return,
                     displaySignerArgsAsComments: true,
                     suppliedFieldNames: func.argNames,
                     visibility: func.visibility as "public" | "private",

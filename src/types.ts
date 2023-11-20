@@ -159,6 +159,7 @@ export type codeGeneratorOptions = {
   genericTypeTags: string | null; // as a string, not parsed yet
   genericTypeParams: Array<MoveFunctionGenericTypeParam>;
   viewFunction?: boolean;
+  returnValue: Array<string>;
   displaySignerArgsAsComments?: boolean;
   suppliedFieldNames?: Array<string>;
   visibility?: "public" | "private";
