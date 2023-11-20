@@ -36,4 +36,6 @@ export type Uint64String = string;
 export type Uint128String = string;
 export type Uint256String = string;
 export type AccountAddressString = string;
-export type ObjectAddressString = string;
+export type ObjectAddressStruct = {
+  inner: string;
+};

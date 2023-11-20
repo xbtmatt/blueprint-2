@@ -42,9 +42,13 @@ import {
   publishArgumentTestModule,
   PUBLISHER_ACCOUNT_PK,
   PUBLISHER_ACCOUNT_ADDRESS,
+  normalizeObjectAddresses,
+  normalizeObjectAddress,
 } from "./helper";
 import { InputTypes, TransactionBuilder, fundAccounts } from "../src";
 import { TxArgsModule } from "../generated/args_test_suite";
+import { gray, lightBlue, lightGreen, lightMagenta } from "kolorist";
+import { ObjectAddressStruct } from "src/boilerplate/types";
 
 // Upper bound values for uint8, uint16, uint64 and uint128
 export const MAX_U8_NUMBER: Uint8 = 2 ** 8 - 1;
@@ -333,153 +337,137 @@ describe("various transaction arguments", () => {
         feePayer: feePayerAccount,
       });
     });
-    it.skip("tests view_complex_outputs, a view function with complex, nested output types", async () => {
-      const viewComplexOutputs = await new TxArgsModule.ViewComplexOutputs().submit({
-        aptos,
-      });
 
+    it("tests view_all_arguments, a view function that outputs all the arguments passed in", async () => {
+      const args = [
+        true,
+        1,
+        2,
+        3,
+        "4",
+        "5",
+        "6",
+        senderAccount.accountAddress.toString(),
+        "This is my favorite string :)",
+        moduleObjects[0].toString(),
+        new Uint8Array([1, 2, 3]),
+        [true, false, true],
+        new Uint8Array([0, 255, 1, 2]),
+        [1, 2, 3, 4],
+        [5, 6, 7, 8],
+        ["9", "10", "11", "12"],
+        ["13", "14", "15", "16"],
+        ["17", "18", "19", "20"],
+        [
+          AccountAddress.ZERO,
+          AccountAddress.ONE,
+          AccountAddress.TWO,
+          AccountAddress.THREE,
+          AccountAddress.FOUR,
+          senderAccount.accountAddress,
+        ].map((a) => a.toString()),
+        ["this", "is", "a", "string"],
+      ] as const;
+      const viewAllArguments = await new TxArgsModule.ViewSomeArguments(
+        args[0],
+        args[1],
+        args[2],
+        args[3],
+        args[4],
+        args[5],
+        args[6],
+        args[7],
+        args[8],
+        args[9],
+        args[10],
+        Array.from(args[11]),
+        args[12],
+        Array.from(args[13]),
+        Array.from(args[14]),
+        Array.from(args[15]),
+        Array.from(args[16]),
+        Array.from(args[17]),
+        Array.from(args[18]),
+        Array.from(args[19]),
+      ).submit({ aptos });
+      viewAllArguments.forEach((arg, i) => {
+        if (i == 9) {
+          const arg = viewAllArguments[i]; // for explicit type checking
+          expect(normalizeObjectAddress(arg)).toEqual({ inner: args[i].toString() });
+        } else if (i == 10 || i == 12) {
+          expect(arg).toEqual(Hex.fromHexInput(new Uint8Array(args[i].map((n) => n))).toString());
+        } else if (i == 15 || i == 16 || i == 17) {
+          expect(arg).toEqual(args[i].map((n) => n.toString()));
+        } else {
+          expect(arg).toEqual(args[i]);
+        }
+      });
+    });
+  });
+
+  // TODO: Fix, currently broken
+  it.skip("tests view_complex_outputs, a view function with complex, nested output types", async () => {
+    const viewComplexOutputs = await new TxArgsModule.ViewComplexOutputs().submit({
+      aptos,
+    });
+
+    /*
+
+      // The below does not work. Keeping it for reference.
+      type OptionVec<T> = {
+        vec: T;
+      }
+      
+      type ViewComplexArgumentsPayloadMoveArguments = {
+        deeply_nested_1: Array<HexInput>;
+        deeply_nested_2: Array<Array<ObjectAddressStruct>>;
+        deeply_nested_3: Array<OptionVec<Array<ObjectAddressStruct>>>;
+        deeply_nested_4: Array<Array<Array<Array<ObjectAddressStruct>>>>;
+      };
+      
+      const toObjectAddressStruct = (argA: ObjectAddress) => {
+        return {
+          inner: AccountAddress.fromRelaxed(argA).toString(),
+        }
+      }
+
+      // in ViewComplexArguments constructor body:
+
+    this.args = {
+      deeply_nested_1: deeply_nested_1.map((argA) =>
+        Hex.fromHexInput(argA).toString(),
+      ),
+      deeply_nested_2: deeply_nested_2.map((argA) =>
+        argA.map((argB) => toObjectAddressStruct(argB)
+      )),
+      // deeply_nested_3: [
+      //   { vec: [AccountAddress.ZERO], }
+      // ],
+      deeply_nested_3: deeply_nested_3.map((argA) => {
+        return {
+          vec: argA[0] ? argA[0].map((argB) => toObjectAddressStruct(argB)) : [],
+        }
+      }
+      ),
+      deeply_nested_4: [],
+      
       // TODO: Fix Option output to be `vec: []`, currently it's trying to cast it to an array of one element I think
       // this is specifically for the response outputs
       console.log(JSON.stringify(viewComplexOutputs, null, 3));
       // console.log(viewComplexOutputs);
-      const optionArray = [EXPECTED_VECTOR_STRING];
-      const deeplyNested3 = [optionArray, optionArray, optionArray];
+      const objectArray = [moduleObjects[0], moduleObjects[1], moduleObjects[2]].map(s => s.toString());
+      const deeplyNested3 = [[objectArray], [], [objectArray]];
       const deeplyNested4 = [deeplyNested3, deeplyNested3, deeplyNested3];
       const complexArgsResponse = await new TxArgsModule.ViewComplexArguments(
         [EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8],
-        [EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING],
+        [objectArray, objectArray, objectArray],
         deeplyNested3,
         deeplyNested4,
       ).submit({
         aptos,
       });
       console.log(JSON.stringify(complexArgsResponse, null, 3));
-    });
-  });
-
-  describe.skip("view functions", () => {
-    type MoveStructLayoutObject = {
-      inner: string;
-    };
-
-    // To normalize the addresses, since the first Object address starts with a 0, the JSON response doesn't include it
-    // but ours does.
-    const normalizer = (vectorOfObjects: Array<MoveStructLayoutObject>) => {
-      return vectorOfObjects.map((obj: any) => {
-        return { inner: AccountAddress.fromRelaxed(obj.inner).toString() };
-      });
-    };
-
-    // Note that this returns:
-    //   (
-    //      vector<vector<u8>>,
-    //      vector<vector<Object<EmptyResource>>>,
-    //      vector<Option<vector<Object<EmptyResource>>>>,
-    //      vector<vector<Option<vector<Object<EmptyResource>>>>>,
-    //   )
-    it("correctly expects the view function complex outputs", async () => {
-      const viewFunctionResponse = (await aptos.view({
-        payload: {
-          function: `${senderAccount.accountAddress.toString()}::tx_args_module::view_complex_outputs`,
-          functionArguments: [],
-          typeArguments: [],
-        },
-      })) as any;
-      expect(viewFunctionResponse.length == 4).toBe(true);
-
-      // serialize without length
-      const expectedVectorU8HexString = new FixedBytes(EXPECTED_VECTOR_U8).bcsToHex().toString();
-      expect(viewFunctionResponse[0]).toEqual([
-        expectedVectorU8HexString,
-        expectedVectorU8HexString,
-        expectedVectorU8HexString,
-      ]);
-
-      // We need each obj to be in the format: `{ inner: "0x..." }`
-      const vectorObjectEmptyResource = moduleObjects.map((obj) => {
-        return { inner: obj.toString() };
-      });
-      // We must normalize the object addresses in the response
-      expect(viewFunctionResponse[1].length == 3).toBe(true);
-      expect(normalizer(viewFunctionResponse[1][0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[1][1])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[1][2])).toEqual(vectorObjectEmptyResource);
-
-      expect(viewFunctionResponse[2].length == 3).toBe(true);
-      expect(viewFunctionResponse[2][0].vec.length == 1).toBe(true);
-      expect(normalizer(viewFunctionResponse[2][0].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[2][1].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[2][2].vec[0])).toEqual(vectorObjectEmptyResource);
-
-      expect(viewFunctionResponse[3].length == 3).toBe(true);
-      expect(viewFunctionResponse[3][0].length == 3).toBe(true);
-      expect(viewFunctionResponse[3][0].length == 3).toBe(true);
-      expect(viewFunctionResponse[3][0][0].vec.length == 1).toBe(true);
-      expect(normalizer(viewFunctionResponse[3][0][0].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][0][1].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][0][2].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][1][0].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][1][1].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][1][2].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][2][0].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][2][1].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][2][2].vec[0])).toEqual(vectorObjectEmptyResource);
-    });
-
-    // Currently fails.
-    it.skip("successfully submits a view function with all argument types", async () => {
-      const viewFunctionArguments = [
-        true,
-        1,
-        2,
-        3,
-        4n.toString(),
-        5n.toString(),
-        6n.toString(),
-        senderAccount.accountAddress.toString(),
-        "expected_string",
-        moduleObjects[0].toString(),
-        Hex.fromHexInput(new Uint8Array([])).toString(),
-        [true, false, true],
-        Hex.fromHexInput(new Uint8Array([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER])).toString(),
-        [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
-        [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
-        [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT].map((n) => n.toString()),
-        [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT].map((n) =>
-          n.toString(),
-        ),
-        [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT].map((n) =>
-          n.toString(),
-        ),
-        ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
-        ["expected_string", "abc", "def", "123", "456", "789"],
-        moduleObjects.map((obj) => {
-          return { inner: obj.toString() };
-        }),
-        { vec: "0x" },
-        { vec: [true] },
-        { vec: MoveOption.U8(1).bcsToHex().toString() },
-        // TODO: Fix the below. they currently do not work.
-        { vec: MoveOption.U16(2).bcsToHex().toString() },
-        { vec: MoveOption.U32(3).bcsToHex().toString() },
-        { vec: MoveOption.U64(4).bcsToHex().toString() },
-        { vec: MoveOption.U128(5).bcsToHex().toString() },
-        { vec: MoveOption.U256(6).bcsToHex().toString() },
-        [senderAccount.accountAddress.toString()],
-        ["expected_string"],
-        [moduleObjects[0].toString()],
-      ];
-
-      // Currently does not work. Fails at the 24th tx arg as noted in the arg array above.
-      const viewFunctionResponse = await aptos.view({
-        payload: {
-          function: `${senderAccount.accountAddress.toString()}::tx_args_module::view_all_arguments`,
-          functionArguments: viewFunctionArguments,
-          typeArguments: [],
-        },
-      });
-      console.log(viewFunctionResponse);
-    });
+      */
   });
 });
 

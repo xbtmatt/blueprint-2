@@ -10,8 +10,10 @@ import {
   HexInput,
   InputGenerateTransactionData,
   SimpleEntryFunctionArgumentTypes,
+  AccountAddress,
 } from "@aptos-labs/ts-sdk";
 import publishJson from "./move/arguments/publish.json";
+import { ObjectAddressStruct } from "src/boilerplate/types";
 
 export async function publishPackage(
   aptos: Aptos,
@@ -170,3 +172,13 @@ export async function publishArgumentTestModule(
   const response = await publishPackage(aptos, senderAccount, ARGUMENT_TESTS_CONTRACT_METADATA, [contractBytecode]);
   return response;
 }
+
+export const normalizeObjectAddress = (obj: ObjectAddressStruct) => {
+  return { inner: AccountAddress.fromRelaxed(obj.inner).toString() };
+};
+
+// To normalize the addresses, since the first Object address starts with a 0, the JSON response doesn't include it
+// but ours does.
+export const normalizeObjectAddresses = (vectorOfObjects: Array<ObjectAddressStruct>) => {
+  return vectorOfObjects.map((obj: ObjectAddressStruct) => normalizeObjectAddress(obj));
+};

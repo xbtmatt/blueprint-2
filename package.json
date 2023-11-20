@@ -23,6 +23,7 @@
     "gen": "npm run build && node dist/index.js",
     "jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "dev-esm": "ts-node --esm index.ts",
+    "publish": "npm run build && node dist/tests/publish.js",
     "_fmt": "prettier 'generated/**/*.ts' 'src/*.ts' 'src/**/*.ts' 'tests/*.ts' 'tests/**/*.ts' '.eslintrc.js'",
     "fmt": "pnpm _fmt --write",
     "lint": "eslint 'src/**/*.ts' 'tests/*.ts' 'tests/**/*.ts'",

@@ -40,9 +40,9 @@ export function toViewFunctionReturnTypeString(typeTags: Array<TypeTag>): string
   const typeTagEnum = toTypeTagEnum(typeTag);
   switch (typeTagEnum) {
     case TypeTagEnum.Vector:
-    // if (typeTags.length === 2 && typeTags[1].isU8()) {
-    //   return "HexInput";
-    // }
+      if (typeTags.length === 2 && typeTags[1].isU8()) {
+        return "string";
+      }
     case TypeTagEnum.Option:
       return `${mapping[typeTagEnum]}<${toViewFunctionReturnTypeString(typeTags.slice(1))}>`;
     case TypeTagEnum.Bool:
@@ -173,7 +173,7 @@ export const returnTypeMapForView: { [key in TypeTagEnum]: string } = {
   String: "string",
   Vector: "Array",
   Option: "Option", // OneOrNone<T>
-  Object: "ObjectAddressString",
+  Object: "ObjectAddressStruct",
   Signer: "Signer",
   Generic: "InputTypes",
   Struct: "Struct",
