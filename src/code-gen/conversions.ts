@@ -100,7 +100,7 @@ export function transformViewFunctionInputTypes(fieldName: string, typeTags: Arr
     case TypeTagEnum.Vector:
       // if we're at the innermost type and it's a vector<u8>, we'll use the MoveVector.U8(hex: HexInput) factory method
       if (typeTags.length === 2 && typeTags[1].isU8()) {
-        return `Hex.fromHexInput(${nameFromDepth})${R_PARENTHESIS.repeat(depth)}.toString()`;
+        return `Hex.fromHexInput(${nameFromDepth}).toString()${R_PARENTHESIS.repeat(depth)}`;
       }
     case TypeTagEnum.Option: {
       const innerNameFromDepth = `arg${numberToLetter(depth + 1)}`;
@@ -110,7 +110,9 @@ export function transformViewFunctionInputTypes(fieldName: string, typeTags: Arr
       );
     }
     case TypeTagEnum.AccountAddress:
-      return `${toClassString(toTypeTagEnum(typeTag))}.fromRelaxed(${nameFromDepth}).toString()${R_PARENTHESIS.repeat(depth)}`;
+      return `${toClassString(toTypeTagEnum(typeTag))}.fromRelaxed(${nameFromDepth}).toString()${R_PARENTHESIS.repeat(
+        depth,
+      )}`;
     case TypeTagEnum.Bool:
     case TypeTagEnum.U8:
     case TypeTagEnum.U16:
@@ -160,6 +162,6 @@ export const inputTypeMapForEntry: { [key in TypeTagEnum]: string } = {
   Option: "Option", // OneOrNone<T>
   Object: "ObjectAddress",
   Signer: "Signer",
-  Generic: "InputTypes",
+  Generic: "EntryFunctionArgumentTypes",
   Struct: "Struct",
 };

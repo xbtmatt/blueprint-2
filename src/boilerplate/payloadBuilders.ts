@@ -23,7 +23,10 @@ import {
   Serializable,
   Serializer,
   EntryFunctionPayloadResponse,
+  AnyRawTransaction,
+  AccountAuthenticator,
 } from "@aptos-labs/ts-sdk";
+import { WalletSignTransactionFunction } from "src/types";
 
 export abstract class EntryFunctionPayloadBuilder extends Serializable {
   public abstract readonly moduleAddress: AccountAddress;
@@ -34,6 +37,8 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
   public abstract readonly primarySender: AccountAddress;
   public abstract readonly secondarySenders?: Array<AccountAddress>;
   public abstract readonly feePayer?: AccountAddress;
+  public abstract readonly aptos: Aptos;
+  public abstract readonly rawTransactionInput: AnyRawTransaction;
 
   createPayload(multisigAddress?: AccountAddress): TransactionPayloadEntryFunction | TransactionPayloadMultisig {
     const entryFunction = new EntryFunction(
@@ -50,10 +55,83 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
     return entryFunctionPayload;
   }
 
+  /**
+   *
+   * @param signer either a local Account or a callback function that returns an AccountAuthenticator
+   * @param asFeePayer whether or not the signer is the fee payer
+   * @returns a Promise<AccountAuthenticator>
+   */
+  sign(signer: Account | WalletSignTransactionFunction, asFeePayer?: boolean): Promise<AccountAuthenticator> {
+    if (signer instanceof Account) {
+      const accountAuthenticator = this.aptos.signTransaction({
+        signer,
+        transaction: this.rawTransactionInput,
+        asFeePayer,
+      });
+      return Promise.resolve(accountAuthenticator);
+    }
+    return signer(this.rawTransactionInput, asFeePayer);
+  }
+
+  async submit(
+    primarySigner: Account | WalletSignTransactionFunction | AccountAuthenticator,
+    secondarySigners?: Array<Account | WalletSignTransactionFunction | AccountAuthenticator>,
+    feePayer?: Account | WalletSignTransactionFunction,
+    options?: WaitForTransactionOptions,
+  ): Promise<UserTransactionResponse> {
+    let primarySenderAuthenticator: AccountAuthenticator;
+    let secondarySendersAuthenticators: Array<AccountAuthenticator> | undefined;
+    let feePayerAuthenticator: AccountAuthenticator | undefined;
+    if (primarySigner instanceof AccountAuthenticator) {
+      primarySenderAuthenticator = primarySigner;
+    } else {
+      primarySenderAuthenticator = await this.sign(primarySigner);
+    }
+    if (secondarySigners) {
+      secondarySendersAuthenticators = new Array<AccountAuthenticator>();
+      for (const signer of secondarySigners) {
+        if (signer instanceof AccountAuthenticator) {
+          secondarySendersAuthenticators.push(signer);
+        } else {
+          secondarySendersAuthenticators.push(await this.sign(signer));
+        }
+      }
+      secondarySendersAuthenticators = await Promise.all(
+        secondarySigners.map(async (signer) => {
+          if (signer instanceof AccountAuthenticator) {
+            return signer;
+          }
+          return await this.sign(signer);
+        }),
+      );
+    }
+    if (feePayer) {
+      if (feePayer instanceof AccountAuthenticator) {
+        feePayerAuthenticator = feePayer;
+      } else {
+        feePayerAuthenticator = await this.sign(feePayer, true);
+      }
+    }
+
+    const pendingTransaction = await this.aptos.submitTransaction({
+      transaction: this.rawTransactionInput,
+      senderAuthenticator: primarySenderAuthenticator,
+      feePayerAuthenticator,
+      additionalSignersAuthenticators: secondarySendersAuthenticators,
+    });
+
+    const userTransactionResponse = await this.aptos.waitForTransaction({
+      transactionHash: pendingTransaction.hash,
+      options,
+    });
+
+    return userTransactionResponse as UserTransactionResponse;
+  }
+
   // You can only submit a regular transaction with this function.
   // if you wish to submit this payload as a multisig transaction for `multisig_account.move`, please use the `submitMultisig` function.
   // TODO: Add `submitMultisig` function
-  async submit(args: {
+  async submit2(args: {
     signer: Account;
     aptos: Aptos;
     options?: WaitForTransactionOptions;

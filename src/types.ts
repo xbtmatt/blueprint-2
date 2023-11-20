@@ -25,6 +25,7 @@ import {
   AccountAuthenticator,
   TypeTag,
   TypeTagStruct,
+  RawTransaction,
 } from "@aptos-labs/ts-sdk";
 
 // If you change the "SimpleMapToKind" list of keys you need to change this name here.
@@ -154,7 +155,7 @@ export type codeGeneratorOptions = {
   moduleName: string;
   functionName: string;
   className: string;
-  typeTags: Array<TypeTag>;
+  functionArgumentTypeTags: Array<TypeTag>;
   genericTypeTags: string | null; // as a string, not parsed yet
   genericTypeParams: Array<MoveFunctionGenericTypeParam>;
   viewFunction?: boolean;
@@ -165,4 +166,12 @@ export type codeGeneratorOptions = {
     displayFunctionSignature?: boolean;
     fullStructNames?: boolean;
   };
+};
+
+// This is supposed to match some function in the wallet adapter
+export type WalletSignTransactionFunction = (...args: any[]) => Promise<AccountAuthenticator>;
+
+export type AccountAuthenticatorWithData = {
+  accountAddress: AccountAddress;
+  accountAuthenticator: AccountAuthenticator;
 };

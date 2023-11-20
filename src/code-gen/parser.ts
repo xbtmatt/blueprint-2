@@ -37,6 +37,8 @@ import {
   SECONDARY_SENDERS_FIELD_NAME,
   MODULE_ADDRESS_FIELD_NAME,
   R_PARENTHESIS,
+  TransactionType,
+  InputTransactionType,
 } from "../index.js";
 import fs from "fs";
 import { ConfigDictionary } from "./config.js";
@@ -49,7 +51,7 @@ import {
   getBoilerplateImports,
   BOILERPLATE_COPYRIGHT,
 } from "../index.js";
-import { blue, red, yellow, green, white, lightGreen, ansi256Bg, ansi256 } from "kolorist";
+import { blue, red, yellow, green, white, lightGreen, ansi256Bg, ansi256, lightBlue, lightMagenta } from "kolorist";
 
 export class CodeGenerator {
   public readonly config: ConfigDictionary;
@@ -65,47 +67,55 @@ export class CodeGenerator {
       moduleName,
       functionName,
       className,
-      typeTags,
-      genericTypeTags,
+      functionArgumentTypeTags,
       displaySignerArgsAsComments,
       suppliedFieldNames,
       visibility,
       genericTypeParams,
       documentation,
     } = args;
+    const genericTypeTagsString = args.genericTypeTags ?? "";
+    const genericTypeTags = genericTypeTagsString
+      .split(",")
+      .filter((t) => t !== "")
+      .map((t) => {
+        const typeTagNoAbility = t.split(":")[0];
+        return parseTypeTag(typeTagNoAbility.trim(), { allowGenerics: true });
+      });
     const viewFunction = args.viewFunction ?? false;
     const fieldNames = suppliedFieldNames ?? [];
 
     // Check if the user supplied field names
     // If they're undefined or length 0, generate them
     if (fieldNames === undefined || fieldNames.length === 0) {
-      for (let i = 0; i < typeTags.length; i += 1) {
+      for (let i = 0; i < functionArgumentTypeTags.length; i += 1) {
         fieldNames.push(`${DEFAULT_ARGUMENT_BASE}${i}`);
       }
       // otherwise, ensure that the array lengths match
-    } else if (fieldNames.length !== typeTags.length) {
+    } else if (fieldNames.length !== functionArgumentTypeTags.length) {
       console.log(
         moduleAddress.toString(),
         moduleName,
         functionName,
         fieldNames,
-        typeTags.map((t) => t.toString()),
+        functionArgumentTypeTags.map((t) => t.toString()),
       );
-      throw new Error(`fieldNames.length (${fieldNames.length}) !== typeTags.length (${typeTags.length})`);
+      throw new Error(
+        `fieldNames.length (${fieldNames.length}) !== functionArgumentsTypeTags.length (${functionArgumentTypeTags.length})`,
+      );
     }
 
     // --------------- Handle signers --------------- //
     // console.log(genericTypeTags);
     // Get the array of annotated BCS class names, their string representation, and original TypeTag string
     const { signerArguments, functionArguments, genericsWithAbilities } = this.getClassArgTypes(
-      typeTags,
+      functionArgumentTypeTags,
       genericTypeParams,
     );
     const lines: Array<string> = [];
 
     const argsType = `${className}PayloadMoveArguments`;
     const signerArgumentNames = suppliedFieldNames ? suppliedFieldNames.splice(0, signerArguments.length) : [];
-    const joinedGenericsWithAbilities = genericsWithAbilities.join(", ");
 
     // ---------- Declare class field types separately ---------- //
     if (functionArguments.length > 0) {
@@ -123,118 +133,155 @@ export class CodeGenerator {
     lines.push("");
 
     // ---------- Documentation --------- //
-    const atleastOneGeneric = genericsWithAbilities.length > 0;
+    const atleastOneGeneric = (genericTypeTagsString ?? "").includes(",");
     const leftCaret = atleastOneGeneric ? "<" : "";
     const rightCaret = atleastOneGeneric ? ">" : "";
 
+    const funcSignatureLines = new Array<string>();
     if (documentation?.displayFunctionSignature) {
-      lines.push("/**");
-      lines.push(`*  ${visibility} fun ${functionName}${leftCaret}${joinedGenericsWithAbilities}${rightCaret}(`);
+      funcSignatureLines.push("/**");
+      funcSignatureLines.push(
+        `*  ${visibility == "public" ? visibility : ""} ${
+          viewFunction ? "" : "entry"
+        } fun ${functionName}${leftCaret}${genericTypeTagsString}${rightCaret}(`,
+      );
       signerArguments.forEach((signerArgument, i) => {
-        lines.push(`*     ${signerArgumentNames[i]}: ${signerArgument.annotation},`);
+        funcSignatureLines.push(`*     ${signerArgumentNames[i]}: ${signerArgument.annotation},`);
       });
       functionArguments.forEach((functionArgument, i) => {
-        lines.push(`*     ${fieldNames[i]}: ${functionArgument.annotation},`);
+        funcSignatureLines.push(`*     ${fieldNames[i]}: ${functionArgument.annotation},`);
       });
-      lines.push("*   )");
-      lines.push("**/");
+      funcSignatureLines.push("*   )");
+      funcSignatureLines.push("**/");
     }
+    const functionSignature = funcSignatureLines.join("\n");
+    lines.push(functionSignature);
+    lines.push(funcSignatureLines.join("\n"));
 
     const accountAddressInputString = toInputTypeString([new TypeTagAddress()], viewFunction);
     const accountAddressClassString = toClassString(TypeTagEnum.AccountAddress);
 
     // ---------- Class fields ---------- //
     const entryOrView = viewFunction ? "View" : "Entry";
-    const secondarySenders = signerArguments.slice(1).map(s => accountAddressClassString);
-    const classFields = `
+    const secondarySenders = signerArguments.slice(1).map((s) => accountAddressClassString);
+    const classFields =
+      `
     export class ${className} extends ${entryOrView}FunctionPayloadBuilder {
       public readonly moduleAddress = ${MODULE_ADDRESS_FIELD_NAME};
       public readonly moduleName = "${moduleName}";
       public readonly functionName = "${functionName}";
-      public readonly ${PRIMARY_SENDER_FIELD_NAME}: ${accountAddressClassString};
-      public readonly ${SECONDARY_SENDERS_FIELD_NAME}: [${secondarySenders.join(', ')}]${secondarySenders.length > 0 ? "" : " = []"};
       public readonly args: ${functionArguments.length > 0 ? argsType : "{ }"};
-      public readonly typeTags: Array<TypeTag> = []; ${atleastOneGeneric ? "//" : ""} ${joinedGenericsWithAbilities}
-      public readonly ${FEE_PAYER_FIELD_NAME}?: ${accountAddressClassString};
-    `;
+      public readonly typeTags: Array<TypeTag> = []; ${atleastOneGeneric ? `// ${genericTypeTagsString}` : ""}` +
+      "\n" +
+      // only add senders if it's an entry function
+      (viewFunction
+        ? ""
+        : `public readonly ${PRIMARY_SENDER_FIELD_NAME}: ${accountAddressClassString};
+      public readonly ${SECONDARY_SENDERS_FIELD_NAME}: [${secondarySenders.join(", ")}]${
+        secondarySenders.length > 0 ? "" : " = []"
+      };
+      public readonly ${FEE_PAYER_FIELD_NAME}?: ${accountAddressClassString};`);
     lines.push(classFields);
+    lines.push("\n");
 
     // -------- Constructor input types -------- //
     // constructor fields
     const constructorSenders = new Array<string>();
     const constructorOtherArgs = new Array<string>();
-    if (true) {
-      lines.push(`private constructor(`);
-      signerArguments.forEach((signerArgument, i) => {
-        if (this.config.includeAccountParams) {
-          // TODO: Add support for adding an Account directly in the constructor..?
-          constructorSenders.push(`${signerArgumentNames[i]}: Account, // ${signerArgument.annotation}`);
-        } else {
-          // signers are `AccountAddress` in the constructor signature because we're just generating the raw transaction here.
-          constructorSenders.push(`${signerArgumentNames[i]}: ${accountAddressInputString}, // ${signerArgument.annotation}`);
-        }
-      });
-      functionArguments.forEach((functionArgument, i) => {
-        const inputType = toInputTypeString(functionArgument.typeTagArray, viewFunction);
-        const argComment = ` // ${functionArgument.annotation}`;
-        constructorOtherArgs.push(`${fieldNames[i]}: ${inputType}, ${argComment}`);
-      });
-      if (genericTypeTags) {
-        constructorOtherArgs.push(`typeTags: Array<TypeTagInput>, ${atleastOneGeneric ? "//" : ""} ${joinedGenericsWithAbilities}`);
-      }
-      if (!viewFunction) {
-        if (this.config.includeAccountParams) {
-          constructorOtherArgs.push("feePayer?: Account, // optional fee payer account to sponsor the transaction");
-        } else {
-          constructorOtherArgs.push(`feePayer?: ${accountAddressInputString}, // optional fee payer account to sponsor the transaction`);
-        }
-      }
-      lines.push(constructorSenders.join("\n"));
-      lines.push(constructorOtherArgs.join("\n"));
-      lines.push(`) {`);
+    const noSignerArgEntryFunction = !viewFunction && signerArguments.length === 0;
 
-      // -------- Assign constructor fields to class fields -------- //
-      lines.push(`super();`);
-      const signerArgumentNamesAsClasses = signerArgumentNames.map((signerArgumentName) => `AccountAddress.fromRelaxed(${signerArgumentName})`);
-      const primarySenderAssignment = `this.${PRIMARY_SENDER_FIELD_NAME} = ${signerArgumentNamesAsClasses[0]};`;
-      const secondarySenderAssignment = `this.${SECONDARY_SENDERS_FIELD_NAME} = [${signerArgumentNamesAsClasses.slice(1).join(", ")}];`;
-      lines.push(signerArguments.length >= 1 ? primarySenderAssignment : '');
-      lines.push(signerArguments.length > 1 ? secondarySenderAssignment : '');
-      lines.push(`this.args = {`);
-      functionArguments.forEach((_, i) => {
-        // Don't use BCS classes for view functions, since they don't need to be serialized
-        // Although we can use them eventually when view functions accepts BCS inputs
-        if (viewFunction) {
-          // lines.push(`${fieldNames[i]}: ${functionArguments[i].kindArray},`);
-          const viewFunctionInputTypeConverter = transformViewFunctionInputTypes(
-            fieldNames[i],
-            functionArguments[i].typeTagArray,
-            0,
-          );
-          lines.push(`${fieldNames[i]}: ${viewFunctionInputTypeConverter},`);
-        } else {
-          const entryFunctionInputTypeConverter = transformEntryFunctionInputTypes(
-            fieldNames[i],
-            functionArguments[i].typeTagArray,
-            0,
-          );
-          lines.push(`${fieldNames[i]}: ${entryFunctionInputTypeConverter},`);
-        }
-      });
-      lines.push(`}`);
-      if (genericTypeTags) {
-        lines.push(
-          `this.typeTags = typeTags.map(typeTag => typeof typeTag === 'string' ? parseTypeTag(typeTag) : typeTag);`,
+    lines.push(`private constructor(`);
+    signerArguments.forEach((signerArgument, i) => {
+      if (this.config.includeAccountParams) {
+        // TODO: Add support for adding an Account directly in the constructor..?
+        constructorSenders.push(`${signerArgumentNames[i]}: Account, // ${signerArgument.annotation}`);
+      } else {
+        // signers are `AccountAddress` in the constructor signature because we're just generating the raw transaction here.
+        constructorSenders.push(
+          `${signerArgumentNames[i]}: ${accountAddressInputString}, // ${signerArgument.annotation}`,
         );
       }
-      if (!viewFunction) {
-        lines.push(`this.${FEE_PAYER_FIELD_NAME} = (${FEE_PAYER_FIELD_NAME} !== undefined) ? AccountAddress.fromRelaxed(${FEE_PAYER_FIELD_NAME}) : undefined;`);
-      }
-      lines.push(`}`);
-    } else {
-      // TODO: Fix no-signer entry function constructor?
-      lines.push(`private constructor() { super(); this.args = { }; }`);
+    });
+    // If this is an entry function and the `signer` isn't included in the entry function arguments,
+    // we still need to set the primarySender class field in the constructor
+    if (noSignerArgEntryFunction) {
+      constructorSenders.push(
+        `${PRIMARY_SENDER_FIELD_NAME}: ${accountAddressInputString}, // not used in the entry function as an argument, but needed to submit the transaction`,
+      );
     }
+    functionArguments.forEach((functionArgument, i) => {
+      const inputType = toInputTypeString(functionArgument.typeTagArray, viewFunction);
+      const argComment = ` // ${functionArgument.annotation}`;
+      constructorOtherArgs.push(`${fieldNames[i]}: ${inputType}, ${argComment}`);
+    });
+    if (genericTypeTagsString) {
+      constructorOtherArgs.push(
+        `typeTags: Array<TypeTagInput>, ${atleastOneGeneric ? "//" : ""} ${genericTypeTagsString}`,
+      );
+    }
+    if (!viewFunction) {
+      if (this.config.includeAccountParams) {
+        constructorOtherArgs.push("feePayer?: Account, // optional fee payer account to sponsor the transaction");
+      } else {
+        constructorOtherArgs.push(
+          `feePayer?: ${accountAddressInputString}, // optional fee payer account to sponsor the transaction`,
+        );
+      }
+    }
+    lines.push(constructorSenders.join("\n"));
+    lines.push(constructorOtherArgs.join("\n"));
+    lines.push(`) {`);
+
+    // -------- Assign constructor fields to class fields -------- //
+    lines.push(`super();`);
+    const signerArgumentNamesAsClasses = signerArgumentNames.map(
+      (signerArgumentName) => `AccountAddress.fromRelaxed(${signerArgumentName})`,
+    );
+    const primarySenderAssignment = `this.${PRIMARY_SENDER_FIELD_NAME} = ${signerArgumentNamesAsClasses[0]};`;
+    const secondarySenderAssignment = `this.${SECONDARY_SENDERS_FIELD_NAME} = [${signerArgumentNamesAsClasses
+      .slice(1)
+      .join(", ")}];`;
+
+    if (noSignerArgEntryFunction) {
+      lines.push(`this.${PRIMARY_SENDER_FIELD_NAME} = AccountAddress.fromRelaxed(${PRIMARY_SENDER_FIELD_NAME});`);
+    } else {
+      lines.push(signerArguments.length >= 1 ? primarySenderAssignment : "");
+      lines.push(signerArguments.length > 1 ? secondarySenderAssignment : "");
+    }
+
+    lines.push(`this.args = {`);
+    functionArguments.forEach((_, i) => {
+      // Don't use BCS classes for view functions, since they don't need to be serialized
+      // Although we can use them eventually when view functions accepts BCS inputs
+      if (viewFunction) {
+        // lines.push(`${fieldNames[i]}: ${functionArguments[i].kindArray},`);
+        const viewFunctionInputTypeConverter = transformViewFunctionInputTypes(
+          fieldNames[i],
+          functionArguments[i].typeTagArray,
+          0,
+        );
+        lines.push(`${fieldNames[i]}: ${viewFunctionInputTypeConverter},`);
+      } else {
+        const entryFunctionInputTypeConverter = transformEntryFunctionInputTypes(
+          fieldNames[i],
+          functionArguments[i].typeTagArray,
+          0,
+        );
+        lines.push(`${fieldNames[i]}: ${entryFunctionInputTypeConverter},`);
+      }
+    });
+    lines.push(`}`);
+    if (genericTypeTagsString) {
+      lines.push(
+        `this.typeTags = typeTags.map(typeTag => typeof typeTag === 'string' ? parseTypeTag(typeTag) : typeTag);`,
+      );
+    }
+    if (!viewFunction) {
+      lines.push(
+        `this.${FEE_PAYER_FIELD_NAME} = (${FEE_PAYER_FIELD_NAME} !== undefined) ? AccountAddress.fromRelaxed(${FEE_PAYER_FIELD_NAME}) : undefined;`,
+      );
+    }
+    lines.push(`}`);
 
     if (!viewFunction) {
       const buildString = this.createBuildFunction(
@@ -245,7 +292,8 @@ export class CodeGenerator {
         false,
         accountAddressInputString,
         viewFunction,
-        typeTags,
+        genericTypeTags,
+        noSignerArgEntryFunction,
       );
       lines.push(buildString);
       const buildStringWithFeePayer = this.createBuildFunction(
@@ -256,7 +304,8 @@ export class CodeGenerator {
         true,
         accountAddressInputString,
         viewFunction,
-        typeTags,
+        genericTypeTags,
+        noSignerArgEntryFunction,
       );
       lines.push(buildStringWithFeePayer);
     }
@@ -264,6 +313,13 @@ export class CodeGenerator {
     return lines.join("\n");
   }
 
+  // TODO: Fix
+  // right now this is non-maintainable and very messy
+  // What you should do is create an abstract implementation of build and buildWithFeePayer
+  // with the base functionality and then find a way to make `build` and `buildWithFeePayer`
+  // implementations in the subclasses by packing the signerArgumentNames into the primarySender
+  // and secondarySenders args that would be in the abstract implementation. That way it's more modular and
+  // maintainable and you're not repeating this code everywhere
   createBuildFunction(
     signerArguments: Array<AnnotatedBCSArgument>,
     signerArgumentNames: Array<string>,
@@ -272,53 +328,97 @@ export class CodeGenerator {
     withFeePayer: boolean,
     accountAddressInputString: string,
     viewFunction: boolean,
-    typeTags: Array<TypeTag>,
+    genericTypeTags: Array<TypeTag>,
+    noSignerArgEntryFunction: boolean,
   ) {
+    // If there's no signer args in the entry function, we need to add the primary sender to the constructor
+    // because a payload needs a sender, even if it's not used in the entry function
+    if (noSignerArgEntryFunction) {
+      signerArguments.push({
+        typeTagArray: [new TypeTagAddress()],
+        classString: toClassString(TypeTagEnum.AccountAddress),
+        annotation: "sender for the payload, not used in the entry function as an argument",
+      });
+      signerArgumentNames.push(PRIMARY_SENDER_FIELD_NAME);
+    }
     const constructorSenders = new Array<string>();
     const constructorOtherArgs = new Array<string>();
     signerArguments.forEach((signerArgument, i) => {
-      constructorSenders.push(`${signerArgumentNames[i]}: ${accountAddressInputString}, // ${signerArgument.annotation}`);
+      constructorSenders.push(
+        `${signerArgumentNames[i]}: ${accountAddressInputString}, // ${signerArgument.annotation}`,
+      );
     });
     functionArguments.forEach((functionArgument, i) => {
       const inputType = toInputTypeString(functionArgument.typeTagArray, viewFunction);
       const argComment = ` // ${functionArgument.annotation}`;
       constructorOtherArgs.push(`${fieldNames[i]}: ${inputType}, ${argComment}`);
     });
-    // constructorOtherArgs.push('aptosConfig: AptosConfig,');
-    constructorOtherArgs.push(`feePayer?: ${accountAddressInputString}, // optional fee payer account to sponsor the transaction`);
+    constructorOtherArgs.push(
+      `feePayer?: ${accountAddressInputString}, // optional fee payer account to sponsor the transaction`,
+    );
 
-    const conditionalComma = constructorSenders.length > 0 ? "," : "";
-    const conditionalCommaSecondarySenders = constructorOtherArgs.slice(0, -1).length > 0 ? "," : "";
-    const conditionalCommaFeePayer = constructorOtherArgs.length > 0 ? "," : "";
+    const withSecondarySenders = signerArguments.length > 1;
+    const singleSigner = signerArguments.length === 1;
+    const transactionType = withFeePayer
+      ? TransactionType.FeePayer
+      : withSecondarySenders
+        ? TransactionType.MultiAgent
+        : TransactionType.SingleSigner;
+
+    const conditionalCommaAndNewLine = constructorSenders.length > 0 ? ",\n" : "";
+    const conditionalCommaAndNewLineSecondarySenders = constructorOtherArgs.slice(0, -1).length > 0 ? ",\n" : "";
+    const conditionalCommaAndNewLineFeePayer = constructorOtherArgs.length > 0 ? ",\n" : "";
+
+    const withTypeTags = genericTypeTags.length > 0;
+    const typeTagsInBuildFunctionSignatureString = withTypeTags ? "typeTags: Array<TypeTag>,\n" : "";
+    const typeTagsInConstructorCallString = withTypeTags ? `typeTags,\n` : "";
 
     // TODO: Fix this later
-    // const rawTransactionType = `Promise<RawTransaction${(withFeePayer || withSecondarySenders) ? "WithData" : ""}>`;
-    const rawTransactionType = `Promise<RawTransaction>`;
-    const staticBuild = `
-      static async build${withFeePayer ? "WithFeePayer" : ""}(
-        ${constructorSenders.join("\n")}
-        ${constructorOtherArgs.slice(0, -1).join("\n")}
-        ${withFeePayer ? `feePayer: ${accountAddressInputString},` : ""}
-        aptosConfig: AptosConfig,
-        typeTags: Array<TypeTag>,
-        options?: InputGenerateTransactionOptions,
-      ): Promise<${rawTransactionType}> {
-        const payloadBuilder = new this(
-          ${constructorSenders.map(s => s.split(':')[0]).join(",\n")}${conditionalComma}
-          ${constructorOtherArgs.slice(0, -1).map(s => s.split(':')[0]).join(",\n")}${conditionalCommaSecondarySenders}
-          ${withFeePayer ? constructorOtherArgs.pop()?.split("?:")[0] + (conditionalCommaFeePayer) : ""}
-        );
-        const rawTransaction = (await buildTransaction({
+    const returnType = withFeePayer
+      ? InputTransactionType.FeePayer
+      : withSecondarySenders
+        ? InputTransactionType.MultiAgent
+        : InputTransactionType.SingleSigner;
+    const staticBuild =
+      `` +
+      `static async build${withFeePayer ? "WithFeePayer" : ""}(\n` +
+      "aptosConfig: AptosConfig,\n" +
+      (constructorSenders.join("\n") + "\n") +
+      (constructorOtherArgs.slice(0, -1).join("\n") + "\n") +
+      typeTagsInBuildFunctionSignatureString +
+      (withFeePayer ? "feePayer:" + accountAddressInputString + ",\n" : "") +
+      `options?: InputGenerateTransactionOptions,\n` +
+      `): Promise<${returnType}> {
+        const payloadBuilder = new this(` +
+      constructorSenders.map((s) => s.split(":")[0]).join(",\n") +
+      conditionalCommaAndNewLine +
+      constructorOtherArgs
+        .slice(0, -1)
+        .map((s) => s.split(":")[0])
+        .join(",\n") +
+      conditionalCommaAndNewLineSecondarySenders +
+      typeTagsInConstructorCallString +
+      (withFeePayer ? constructorOtherArgs.pop()?.split("?:")[0] + conditionalCommaAndNewLineFeePayer : "") +
+      `);
+        const transactionInputData = (await buildTransaction({
           aptosConfig,
-          sender: payloadBuilder.${PRIMARY_SENDER_FIELD_NAME},
-          ${withFeePayer ? "feePayerAddress: feePayer ?? AccountAddress.ZERO," : ""}
-          ${signerArguments.length > 1 ? "secondarySignerAddresses: payloadBuilder.secondarySenders," : ""}
-          payload: payloadBuilder.toPayload(),
+          sender: payloadBuilder.${PRIMARY_SENDER_FIELD_NAME},\n` +
+      (withFeePayer ? "feePayerAddress: feePayer ?? AccountAddress.ZERO,\n" : "") +
+      (withSecondarySenders ? "secondarySignerAddresses: payloadBuilder.secondarySenders,\n" : "") +
+      `payload: payloadBuilder.createPayload(),
           options,
-        })).rawTransaction;
-        return rawTransaction;
+        }));
+        return transactionInputData;
       }
     `;
+
+    if (noSignerArgEntryFunction) {
+      console.log(staticBuild);
+      //
+      console.log("----------");
+      console.log(constructorSenders.join("\n") + "\n" + (constructorOtherArgs.slice(0, -1).join("\n") + "\n"));
+    }
+
     // static build (no fee payer) will take off the last line in the constructor signature (the fee payer)
     // static buildWithFeePayer will explicitly include the feePayer, regardless of whether or not it's passed in to the static factory method. This is because
     //      we will set it to 0x0 if they don't provide it.
@@ -338,10 +438,10 @@ export class CodeGenerator {
       let annotation = this.config.expandedStructs
         ? typeTag.toString()
         : truncatedTypeTagString({
-          typeTag,
-          namedAddresses: this.config.namedAddresses,
-          namedTypeTags: this.config.namedTypeTags,
-        });
+            typeTag,
+            namedAddresses: this.config.namedAddresses,
+            namedTypeTags: this.config.namedTypeTags,
+          });
 
       // TODO: Change this to Account? Or something else, not sure. But AccountAuthenticator doesn't make sense in the new flow anymore.
       // Check if it's an AccountAuthenticator, which indicates it's a signer argument
@@ -503,7 +603,7 @@ export class CodeGenerator {
                     moduleName: abiFunction.moduleName,
                     functionName: func.name,
                     className: `${toPascalCase(func.name)}`,
-                    typeTags: typeTags,
+                    functionArgumentTypeTags: typeTags,
                     genericTypeTags: func.genericTypes,
                     viewFunction: func.is_view,
                     displaySignerArgsAsComments: true,
@@ -641,7 +741,9 @@ export class CodeGenerator {
 
       perAddressIndexFile.push(`export * as ${toPascalCase(name)} from "./${name}.js";`);
       if (i === Object.keys(codeMap).length - 1) {
-        perAddressIndexFile.push(`\nexport const ${MODULE_ADDRESS_FIELD_NAME} = AccountAddress.fromRelaxed("${address}");\n`);
+        perAddressIndexFile.push(
+          `\nexport const ${MODULE_ADDRESS_FIELD_NAME} = AccountAddress.fromRelaxed("${address}");\n`,
+        );
         // create the index.ts file
         const indexFilePath = `${directory}/index.ts`;
         if (fs.existsSync(indexFilePath)) {

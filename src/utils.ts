@@ -1,7 +1,17 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-import { AccountAddress, Hex, TypeTag, MoveModule, MoveModuleBytecode, Aptos } from "@aptos-labs/ts-sdk";
+import {
+  AccountAddress,
+  Hex,
+  TypeTag,
+  MoveModule,
+  MoveModuleBytecode,
+  Aptos,
+  Account,
+  MoveVector,
+  UserTransactionResponse,
+} from "@aptos-labs/ts-sdk";
 import pako from "pako";
 import { toClassString, toTypeTagEnum } from "./code-gen/index.js";
 import fs from "fs";
@@ -92,4 +102,49 @@ export async function sleep(timeMs: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, timeMs);
   });
+}
+
+export const FUND_AMOUNT = 100_000_000;
+
+// Instead of funding each account individually, we fund one twice, then send coins from it to the rest
+// This results in 2 fund requests and 1 transaction instead of N fund requests. For running tests,
+// this saves 10-15 seconds each run.
+export async function fundAccounts(aptos: Aptos, accounts: Array<Account>) {
+  // Fund first account
+  const firstAccount = accounts[0];
+  // Fund the first account twice to make sure it has enough coins to send to the rest
+  const resp1 = await aptos.fundAccount({
+    accountAddress: firstAccount.accountAddress.toString(),
+    amount: FUND_AMOUNT,
+  });
+  const resp2 = await aptos.fundAccount({
+    accountAddress: firstAccount.accountAddress.toString(),
+    amount: FUND_AMOUNT,
+  });
+  // Get the addresses for `accounts[1..n]`
+  const addressesRemaining = accounts.slice(1).map((account) => account.accountAddress);
+  const amountToSend = Math.floor((FUND_AMOUNT * 2) / accounts.length);
+  // Send coins from `account[0]` to `account[1..n]`
+  const transaction = await aptos.generateTransaction({
+    sender: firstAccount.accountAddress.toString(),
+    data: {
+      function: "0x1::aptos_account::batch_transfer",
+      functionArguments: [
+        new MoveVector(addressesRemaining),
+        MoveVector.U64(addressesRemaining.map(() => amountToSend)),
+      ],
+    },
+  });
+  const signedTxn = await aptos.signTransaction({
+    signer: firstAccount,
+    transaction,
+  });
+  const transactionResponse = await aptos.submitTransaction({
+    transaction,
+    senderAuthenticator: signedTxn,
+  });
+  const response = await aptos.waitForTransaction({
+    transactionHash: transactionResponse.hash,
+  });
+  return response as UserTransactionResponse;
 }
