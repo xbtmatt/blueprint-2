@@ -34,6 +34,7 @@ import {
   Uint128,
   Uint256,
   TypeTag,
+  TransactionEd25519Signature,
 } from "@aptos-labs/ts-sdk";
 import {
   rawTransactionHelper,
@@ -42,7 +43,7 @@ import {
   PUBLISHER_ACCOUNT_PK,
   PUBLISHER_ACCOUNT_ADDRESS,
 } from "./helper";
-import { TransactionBuilder, fundAccounts } from "../src";
+import { InputTypes, TransactionBuilder, fundAccounts } from "../src";
 import { TxArgsModule } from "../generated/args_test_suite";
 
 // Upper bound values for uint8, uint16, uint64 and uint128
@@ -73,7 +74,7 @@ describe("various transaction arguments", () => {
   const feePayerAccount = Account.generate();
   const moduleObjects: Array<AccountAddress> = [];
   let transactionArguments: Array<EntryFunctionArgumentTypes>;
-  let simpleTransactionArguments: Array<SimpleEntryFunctionArgumentTypes>;
+  let simpleTransactionArguments: Array<InputTypes>;
   let mixedTransactionArguments: Array<EntryFunctionArgumentTypes | SimpleEntryFunctionArgumentTypes>;
   const EXPECTED_VECTOR_U8 = new Uint8Array([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]);
   const EXPECTED_VECTOR_STRING = ["expected_string", "abc", "def", "123", "456", "789"];
@@ -273,263 +274,86 @@ describe("various transaction arguments", () => {
         feePayer: feePayerAccount,
       });
     });
-  });
-
-  describe.skip("single signer entry fns, all arguments except `&signer`, both public and private entry functions", () => {
-    describe("sender is ed25519", () => {
-      it("successfully submits a public entry fn with all argument types except `&signer`", async () => {
-        const response = await rawTransactionHelper(aptos, senderAccount, "public_arguments", [], transactionArguments);
-        expect(response.success).toBe(true);
-      });
-
-      it("successfully submits a private entry fn with all argument types except `&signer`", async () => {
-        const response = await rawTransactionHelper(
-          aptos,
-          senderAccount,
-          "private_arguments",
-          [],
-          transactionArguments,
-        );
-        expect(response.success).toBe(true);
-      });
-
-      it("simple inputs successfully submits a public entry fn with all argument types except `&signer`", async () => {
-        const response = await rawTransactionHelper(
-          aptos,
-          senderAccount,
-          "public_arguments",
-          [],
-          simpleTransactionArguments,
-        );
-        expect(response.success).toBe(true);
-      });
-
-      it("simple inputs successfully submits a private entry fn with all argument types except `&signer`", async () => {
-        const response = await rawTransactionHelper(
-          aptos,
-          senderAccount,
-          "private_arguments",
-          [],
-          simpleTransactionArguments,
-        );
-        expect(response.success).toBe(true);
-      });
-
-      it("mixed inputs successfully submits a public entry fn with all argument types except `&signer`", async () => {
-        const response = await rawTransactionHelper(
-          aptos,
-          senderAccount,
-          "public_arguments",
-          [],
-          mixedTransactionArguments,
-        );
-        expect(response.success).toBe(true);
-      });
-
-      it("mixed inputs successfully submits a private entry fn with all argument types except `&signer`", async () => {
-        const response = await rawTransactionHelper(
-          aptos,
-          senderAccount,
-          "private_arguments",
-          [],
-          mixedTransactionArguments,
-        );
-        expect(response.success).toBe(true);
-      });
-    });
-  });
-
-  // only public entry functions- shouldn't need to test private again
-  describe.skip("single signer transactions with all entry function arguments", () => {
-    it("successfully submits a single signer transaction with all argument types", async () => {
-      const response = await rawTransactionHelper(aptos, senderAccount, "public_arguments", [], transactionArguments);
-      expect(response.success).toBe(true);
-    });
-
-    it("simple inputs successfully submits a single signer transaction with all argument types", async () => {
-      const response = await rawTransactionHelper(
+    it("tests private_arguments, a function with all argument types except `&signer`", async () => {
+      await testAllBuilderPaths({
         aptos,
         senderAccount,
-        "public_arguments",
-        [],
-        simpleTransactionArguments,
-      );
-      expect(response.success).toBe(true);
+        cls: TxArgsModule.PrivateArguments,
+        typeArgs: [],
+        functionArguments: simpleTransactionArguments,
+        secondarySignerAccounts: [],
+        feePayer: feePayerAccount,
+      });
     });
-  });
-
-  // only public entry functions- shouldn't need to test private again
-  describe.skip("multi signer transaction with all entry function arguments", () => {
-    it("successfully submits a multi signer transaction with all argument types", async () => {
-      const secondarySignerAddresses = secondarySignerAccounts.map((account) => account.accountAddress);
-      const response = await rawTransactionMultiAgentHelper(
+    it("tests public_arguments_multiple_signers, a multi-agent function with all argument types except `&signer`", async () => {
+      await testAllBuilderPaths({
         aptos,
         senderAccount,
-        "public_arguments_multiple_signers",
-        [],
-        [
-          new MoveVector<AccountAddress>([senderAccount.accountAddress, ...secondarySignerAddresses]),
-          ...transactionArguments,
-        ],
-        secondarySignerAccounts,
-      );
-      expect(response.success).toBe(true);
-      const responseSignature = response.signature as TransactionMultiAgentSignature;
-      const secondarySignerAddressesParsed = responseSignature.secondary_signer_addresses.map((address) =>
-        AccountAddress.fromStringRelaxed(address),
-      );
-      expect(secondarySignerAddressesParsed.map((s) => s.toString())).toEqual(
-        secondarySignerAddresses.map((address) => address.toString()),
-      );
-      expect((responseSignature as any).fee_payer_address).toBeUndefined();
-    });
-
-    it("simple inputs successfully submits a multi signer transaction with all argument types", async () => {
-      const secondarySignerAddresses = secondarySignerAccounts.map((account) => account.accountAddress);
-      const response = await rawTransactionMultiAgentHelper(
-        aptos,
-        senderAccount,
-        "public_arguments_multiple_signers",
-        [],
-        [
-          [senderAccount.accountAddress.toString(), ...secondarySignerAddresses.map((address) => address.toString())],
+        cls: TxArgsModule.PublicArgumentsMultipleSigners,
+        typeArgs: [],
+        functionArguments: [
+          [senderAccount.accountAddress, ...secondarySignerAccounts.map((s) => s.accountAddress)],
           ...simpleTransactionArguments,
         ],
         secondarySignerAccounts,
-      );
-      expect(response.success).toBe(true);
-      const responseSignature = response.signature as TransactionMultiAgentSignature;
-      const secondarySignerAddressesParsed = responseSignature.secondary_signer_addresses.map((address) =>
-        AccountAddress.fromStringRelaxed(address),
-      );
-      expect(secondarySignerAddressesParsed.map((s) => s.toString())).toEqual(
-        secondarySignerAddresses.map((address) => address.toString()),
-      );
-      expect((responseSignature as any).fee_payer_address).toBeUndefined();
+        feePayer: feePayerAccount,
+      });
     });
-  });
-
-  describe.skip("fee payer transactions with various numbers of signers", () => {
-    it("successfully submits a sponsored transaction with all argument types", async () => {
-      const response = await rawTransactionMultiAgentHelper(
+    it("tests private_arguments_multiple_signers, a multi-agent function with all argument types except `&signer`", async () => {
+      await testAllBuilderPaths({
         aptos,
         senderAccount,
-        "public_arguments",
-        [],
-        transactionArguments,
-        [], // secondary signers
-        feePayerAccount,
-      );
-      expect(response.success).toBe(true);
-      const responseSignature = response.signature as TransactionFeePayerSignature;
-      expect(responseSignature.secondary_signer_addresses.length).toEqual(0);
-      expect(AccountAddress.fromStringRelaxed(responseSignature.fee_payer_address).toString()).toEqual(
-        feePayerAccount.accountAddress.toString(),
-      );
-    });
-
-    it("successfully submits a sponsored multi signer transaction with all argument types", async () => {
-      const secondarySignerAddresses = secondarySignerAccounts.map((account) => account.accountAddress);
-      const response = await rawTransactionMultiAgentHelper(
-        aptos,
-        senderAccount,
-        "public_arguments_multiple_signers",
-        [],
-        [
-          new MoveVector<AccountAddress>([senderAccount.accountAddress, ...secondarySignerAddresses]),
-          ...transactionArguments,
-        ],
-        secondarySignerAccounts,
-        feePayerAccount,
-      );
-      expect(response.success).toBe(true);
-      const responseSignature = response.signature as TransactionFeePayerSignature;
-      const secondarySignerAddressesParsed = responseSignature.secondary_signer_addresses.map((address) =>
-        AccountAddress.fromStringRelaxed(address),
-      );
-      expect(secondarySignerAddressesParsed.map((s) => s.toString())).toEqual(
-        secondarySignerAddresses.map((address) => address.toString()),
-      );
-      expect(AccountAddress.fromStringRelaxed(responseSignature.fee_payer_address).toString()).toEqual(
-        feePayerAccount.accountAddress.toString(),
-      );
-    });
-
-    it("simple inputs successfully submits a sponsored transaction with all argument types", async () => {
-      const response = await rawTransactionMultiAgentHelper(
-        aptos,
-        senderAccount,
-        "public_arguments",
-        [],
-        transactionArguments,
-        [], // secondary signers
-        feePayerAccount,
-      );
-      expect(response.success).toBe(true);
-      const responseSignature = response.signature as TransactionFeePayerSignature;
-      expect(responseSignature.secondary_signer_addresses.length).toEqual(0);
-      expect(AccountAddress.fromStringRelaxed(responseSignature.fee_payer_address).toString()).toEqual(
-        feePayerAccount.accountAddress.toString(),
-      );
-    });
-
-    it("simple inputs successfully submits a sponsored multi signer transaction with all argument types", async () => {
-      const secondarySignerAddresses = secondarySignerAccounts.map((account) => account.accountAddress);
-      const response = await rawTransactionMultiAgentHelper(
-        aptos,
-        senderAccount,
-        "public_arguments_multiple_signers",
-        [],
-        [
-          [senderAccount.accountAddress.toString(), ...secondarySignerAddresses.map((address) => address.toString())],
+        cls: TxArgsModule.PrivateArgumentsMultipleSigners,
+        typeArgs: [],
+        functionArguments: [
+          [senderAccount.accountAddress, ...secondarySignerAccounts.map((s) => s.accountAddress)],
           ...simpleTransactionArguments,
         ],
         secondarySignerAccounts,
-        feePayerAccount,
-      );
-      expect(response.success).toBe(true);
-      const responseSignature = response.signature as TransactionFeePayerSignature;
-      const secondarySignerAddressesParsed = responseSignature.secondary_signer_addresses.map((address) =>
-        AccountAddress.fromStringRelaxed(address),
-      );
-      expect(secondarySignerAddressesParsed.map((s) => s.toString())).toEqual(
-        secondarySignerAddresses.map((address) => address.toString()),
-      );
-      expect(AccountAddress.fromStringRelaxed(responseSignature.fee_payer_address).toString()).toEqual(
-        feePayerAccount.accountAddress.toString(),
-      );
+        feePayer: feePayerAccount,
+      });
     });
-  });
-
-  describe.skip("nested, complex arguments", () => {
-    it("successfully submits a function with very complex arguments", async () => {
-      const optionVector = new MoveOption(MoveVector.MoveString(EXPECTED_VECTOR_STRING));
-      const deeplyNested3 = new MoveVector([optionVector, optionVector, optionVector]);
-      const deeplyNested4 = new MoveVector([deeplyNested3, deeplyNested3, deeplyNested3]);
-
-      const response = await rawTransactionMultiAgentHelper(
+    it("tests complex_arguments, a function with complex, nested argument types", async () => {
+      const optionArray = [EXPECTED_VECTOR_STRING];
+      const deeplyNested3 = [optionArray, optionArray, optionArray];
+      const deeplyNested4 = [deeplyNested3, deeplyNested3, deeplyNested3];
+      const args = [
+        [EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8],
+        [EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING],
+        deeplyNested3,
+        deeplyNested4,
+      ];
+      await testAllBuilderPaths({
         aptos,
         senderAccount,
-        "complex_arguments",
-        [],
-        [
-          new MoveVector([
-            MoveVector.U8(EXPECTED_VECTOR_U8),
-            MoveVector.U8(EXPECTED_VECTOR_U8),
-            MoveVector.U8(EXPECTED_VECTOR_U8),
-          ]),
-          new MoveVector([
-            MoveVector.MoveString(EXPECTED_VECTOR_STRING),
-            MoveVector.MoveString(EXPECTED_VECTOR_STRING),
-            MoveVector.MoveString(EXPECTED_VECTOR_STRING),
-          ]),
-          deeplyNested3,
-          deeplyNested4,
-        ],
-        secondarySignerAccounts,
-        feePayerAccount,
-      );
-      expect(response.success).toBe(true);
+        cls: TxArgsModule.ComplexArguments,
+        typeArgs: [],
+        functionArguments: args,
+        secondarySignerAccounts: [],
+        feePayer: feePayerAccount,
+      });
+    });
+    it.skip("tests view_complex_outputs, a view function with complex, nested output types", async () => {
+      const viewComplexOutputs = await new TxArgsModule.ViewComplexOutputs().submit({
+        aptos,
+      });
+
+      // TODO: Fix Option output to be `vec: []`, currently it's trying to cast it to an array of one element I think
+      // this is specifically for the response outputs
+      console.log(JSON.stringify(viewComplexOutputs, null, 3));
+      // console.log(viewComplexOutputs);
+      const optionArray = [EXPECTED_VECTOR_STRING];
+      const deeplyNested3 = [optionArray, optionArray, optionArray];
+      const deeplyNested4 = [deeplyNested3, deeplyNested3, deeplyNested3];
+      const complexArgsResponse = await new TxArgsModule.ViewComplexArguments(
+        [EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8],
+        [EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING],
+        deeplyNested3,
+        deeplyNested4,
+      ).submit({
+        aptos,
+      });
+      console.log(JSON.stringify(complexArgsResponse, null, 3));
     });
   });
 
@@ -664,7 +488,7 @@ export async function testAllBuilderPaths<T extends TransactionBuilder>(args: {
   senderAccount: Account;
   cls: T;
   typeArgs: Array<TypeTag>;
-  functionArguments: Array<SimpleEntryFunctionArgumentTypes>;
+  functionArguments: Array<InputTypes>;
   secondarySignerAccounts: Array<Account>;
   feePayer: Account;
 }): Promise<boolean> {
@@ -909,6 +733,23 @@ export async function testAllBuilderPaths<T extends TransactionBuilder>(args: {
   });
   const submitResponse = await getSubmitter({ withFeePayer: false });
   const submitResponseWithFeePayer = await getSubmitter({ withFeePayer: true });
+
+  expect(response.success).toBe(true);
+  expect(responseWithFeePayer.success).toBe(true);
+  expect(submitResponse.success).toBe(true);
+  expect(submitResponseWithFeePayer.success).toBe(true);
+
+  const multiAgent = secondarySignerAddresses.length > 0;
+
+  expect(response.signature!.type).toEqual(multiAgent ? "multi_agent_signature" : "single_sender");
+  expect(responseWithFeePayer.signature!.type).toEqual("fee_payer_signature");
+  expect(submitResponse.signature!.type).toEqual(multiAgent ? "multi_agent_signature" : "single_sender");
+  expect(submitResponseWithFeePayer.signature!.type).toEqual("fee_payer_signature");
+
+  const info = builder.responseInfo(response);
+  expect(info.function).toEqual(
+    `${builder.payloadBuilder.moduleAddress}::${builder.payloadBuilder.moduleName}::${builder.payloadBuilder.functionName}`,
+  );
 
   return (
     response.success && responseWithFeePayer.success && submitResponse.success && submitResponseWithFeePayer.success

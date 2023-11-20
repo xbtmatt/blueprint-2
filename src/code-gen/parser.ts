@@ -239,7 +239,7 @@ export class CodeGenerator {
     const constructorOtherArgs = new Array<string>();
     const noSignerArgEntryFunction = !viewFunction && signerArguments.length === 0;
 
-    lines.push(`private constructor(`);
+    lines.push(`${viewFunction ? "" : "private"} constructor(`);
     signerArguments.forEach((signerArgument, i) => {
       if (this.config.includeAccountParams) {
         // TODO: Add support for adding an Account directly in the constructor..?
