@@ -370,8 +370,8 @@ export class CodeGenerator {
 
   // TODO: Fix
   // right now this is non-maintainable and very messy
-  // What you should do is create an abstract implementation of build and buildWithFeePayer
-  // with the base functionality and then find a way to make `build` and `buildWithFeePayer`
+  // What you should do is create an abstract implementation of build and builderWithFeePayer
+  // with the base functionality and then find a way to make `build` and `builderWithFeePayer`
   // implementations in the subclasses by packing the signerArgumentNames into the primarySender
   // and secondarySenders args that would be in the abstract implementation. That way it's more modular and
   // maintainable and you're not repeating this code everywhere
@@ -441,7 +441,7 @@ export class CodeGenerator {
     const returnType = EntryFunctionTransactionBuilder.name;
     const staticBuild =
       `` +
-      `static async build${withFeePayer ? "WithFeePayer" : ""}(\n` +
+      `static async builder${withFeePayer ? "WithFeePayer" : ""}(\n` +
       "aptosConfig: AptosConfig,\n" +
       (constructorSenders.join("\n") + "\n") +
       (constructorOtherArgs.slice(0, -1).join("\n") + "\n") +
@@ -540,7 +540,7 @@ export class CodeGenerator {
 
     const transactionBuilderFunctionSignature =
       `` +
-      `async submit${withFeePayer ? "WithFeePayer" : ""}(` +
+      `static async submit${withFeePayer ? "WithFeePayer" : ""}(` +
       "\n" +
       `aptosConfig: AptosConfig,\n` +
       (constructorSenders.join("\n") + "\n") +
@@ -554,7 +554,7 @@ export class CodeGenerator {
 
     const transactionBuilderInstantiationString =
       `` +
-      `const transactionBuilder = await ${className}.build${withFeePayer ? "WithFeePayer" : ""}(` +
+      `const transactionBuilder = await ${className}.builder${withFeePayer ? "WithFeePayer" : ""}(` +
       "\n" +
       `aptosConfig,\n` +
       constructorSenders.map((s) => `${s.split(":")[0]}.accountAddress`).join(",\n") +
