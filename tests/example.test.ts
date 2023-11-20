@@ -44,14 +44,7 @@ import {
 } from "./helper";
 import { fundAccounts } from "../src";
 import { ArgsTestSuite } from "../generated/";
-import { TxArgsModule } from "generated/args_test_suite";
-import { parse } from "path";
-
-describe("calls functions correctly using generated code", () => {
-  it("", () => {
-    expect(true).toBe(true);
-  });
-});
+import { TxArgsModule } from "../generated/args_test_suite";
 
 // Upper bound values for uint8, uint16, uint64 and uint128
 export const MAX_U8_NUMBER: Uint8 = 2 ** 8 - 1;
@@ -223,7 +216,7 @@ describe("various transaction arguments", () => {
   });
 
   describe("type tags", () => {
-    describe("31 complex type tags", async () => {
+    describe("31 complex type tags", () => {
       const typeTags = [
         "bool",
         "u8",
@@ -277,6 +270,7 @@ describe("various transaction arguments", () => {
           );
           const response = await builder.submit({
             primarySigner: senderAccount,
+            feePayer: feePayerAccount,
           });
 
           expect(response.success).toBe(true);
