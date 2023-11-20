@@ -30,3 +30,10 @@ export type InputTypes =
 export type TypeTagInput = string | TypeTag;
 
 export type MoveObject = AccountAddress;
+
+// for clarity in JSON view function return response types
+export type Uint64String = string;
+export type Uint128String = string;
+export type Uint256String = string;
+export type AccountAddressString = string;
+export type ObjectAddressString = string;

@@ -41,6 +41,7 @@ import {
   TransactionType,
   InputTransactionType,
   EntryFunctionTransactionBuilder,
+  toViewFunctionReturnTypeString,
 } from "../index.js";
 import fs from "fs";
 import { ConfigDictionary } from "./config.js";
@@ -201,14 +202,20 @@ export class CodeGenerator {
     const accountAddressInputString = toInputTypeString([new TypeTagAddress()], viewFunction);
     const accountAddressClassString = toClassString(TypeTagEnum.AccountAddress);
 
-    // const viewFunctionReturnTypes = viewFunction ? `<[${returnValue.map((v) => v ).join(', ')}]>` : '';
+    const returnTypes = returnValue.map((v) => {
+      const typeTag = parseTypeTag(v);
+      const flattenedTypeTag = toFlattenedTypeTag(typeTag);
+      const inputType = toViewFunctionReturnTypeString(flattenedTypeTag);
+      return inputType;
+    });
+    const viewFunctionReturnTypes = viewFunction ? `<[${returnTypes.map((v) => v).join(", ")}]>` : "";
 
     // ---------- Class fields ---------- //
     const entryOrView = viewFunction ? "View" : "Entry";
     const secondarySenders = signerArguments.slice(1).map((s) => accountAddressClassString);
     const classFields =
       `
-    export class ${className} extends ${entryOrView}FunctionPayloadBuilder${""} {
+    export class ${className} extends ${entryOrView}FunctionPayloadBuilder${viewFunctionReturnTypes} {
       public readonly moduleAddress = ${MODULE_ADDRESS_FIELD_NAME};
       public readonly moduleName = "${moduleName}";
       public readonly functionName = "${functionName}";

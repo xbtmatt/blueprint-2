@@ -26,9 +26,10 @@ export const getBoilerplateImports = (sdkPath?: string): string => {
       InputGenerateTransactionOptions, RawTransaction, RawTransactionWithData,
       ${InputTransactionType.FeePayer}, ${InputTransactionType.MultiAgent},
       ${InputTransactionType.SingleSigner}, WaitForTransactionOptions,
-      UserTransactionResponse
+      UserTransactionResponse, MoveValue
     } from "${sdkPath ?? DEFAULT_SDK_PATH}";
-    import { InputTypes, Option, MoveObject, ObjectAddress, TypeTagInput, Uint8, Uint16, Uint32, Uint64, Uint128, Uint256 } from ${ABI_TYPES_FILE};
+    import { InputTypes, Option, MoveObject, ObjectAddress, TypeTagInput, Uint8, Uint16, Uint32, Uint64, Uint128, Uint256,
+              Uint64String, Uint128String, Uint256String, AccountAddressString, ObjectAddressString } from ${ABI_TYPES_FILE};
     import { ViewFunctionPayloadBuilder, EntryFunctionPayloadBuilder, EntryFunctionTransactionBuilder } from ${ABI_PAYLOAD_BUILDER_FILE};
     import { MODULE_ADDRESS } from "./index.js";
     

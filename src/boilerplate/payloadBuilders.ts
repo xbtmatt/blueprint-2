@@ -203,7 +203,7 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
 }
 
 // TODO: Allow for users to store/serialize arguments as BCS classes or JSON/simple entry function argument types
-export abstract class ViewFunctionPayloadBuilder {
+export abstract class ViewFunctionPayloadBuilder<T extends Array<MoveValue>> {
   public abstract readonly moduleAddress: AccountAddress;
   public abstract readonly moduleName: string;
   public abstract readonly functionName: string;
@@ -218,32 +218,13 @@ export abstract class ViewFunctionPayloadBuilder {
     };
   }
 
-  // TODO: Add support for typed responses, so you know what the view function is returning.
-  // this will likely be as if not more complicated than the ability to know a struct type from ABIs
-  // Perhaps for now, we could do something where any field (except for the outermost one) that's a non-primitive Move type would just be `viewResult: MoveValue`
-  // AKA:
-  // struct MyViewRequest {
-  //    field_1: u64,
-  //    field_2: bool,
-  //    field_3: MyOtherStruct,
-  // }
-  //      would be:
-  // struct MyViewResponse {
-  //    field_1: u64,
-  //    field_2: bool,
-  //    field_3: MoveValue,
-  // }
-  async submit(args: { aptos: Aptos; options?: LedgerVersion }): Promise<MoveValue> {
+  async submit(args: { aptos: Aptos; options?: LedgerVersion }): Promise<T> {
     const { aptos, options } = args;
-    const viewRequest = await aptos.view({
+    const viewRequest = await aptos.view<T>({
       payload: this.toPayload(),
       options,
     });
-    // TODO: Fix/inspect why view requests always return an array with the first value as the response data
-    if (viewRequest.length > 1) {
-      console.warn(`View request returned more than one value`, viewRequest);
-    }
-    return viewRequest[0];
+    return viewRequest;
   }
 
   argsToArray(): Array<MoveValue> {

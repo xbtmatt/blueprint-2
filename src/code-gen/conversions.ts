@@ -34,6 +34,37 @@ export function toInputTypeString(typeTags: Array<TypeTag>, forView: boolean): s
   }
 }
 
+export function toViewFunctionReturnTypeString(typeTags: Array<TypeTag>): string {
+  const mapping = returnTypeMapForView;
+  const typeTag = typeTags[0];
+  const typeTagEnum = toTypeTagEnum(typeTag);
+  switch (typeTagEnum) {
+    case TypeTagEnum.Vector:
+    // if (typeTags.length === 2 && typeTags[1].isU8()) {
+    //   return "HexInput";
+    // }
+    case TypeTagEnum.Option:
+      return `${mapping[typeTagEnum]}<${toViewFunctionReturnTypeString(typeTags.slice(1))}>`;
+    case TypeTagEnum.Bool:
+    case TypeTagEnum.U8:
+    case TypeTagEnum.U16:
+    case TypeTagEnum.U32:
+    case TypeTagEnum.String:
+    case TypeTagEnum.Object:
+    case TypeTagEnum.U64:
+    case TypeTagEnum.U128:
+    case TypeTagEnum.U256:
+    case TypeTagEnum.AccountAddress:
+    case TypeTagEnum.Generic:
+    case TypeTagEnum.Signer:
+      return mapping[typeTagEnum];
+    case TypeTagEnum.Struct:
+      return "MoveValue";
+    default:
+      throw new Error(`Unexpected TypeTagEnum: ${typeTagEnum}`);
+  }
+}
+
 /**
  * The transformer function for converting the constructor input types to the class field types
  * @param typeTags the array of typeTags, aka the class types as strings
@@ -129,6 +160,24 @@ export function transformViewFunctionInputTypes(fieldName: string, typeTags: Arr
       throw new Error(`Unknown typeTag: ${typeTag}`);
   }
 }
+
+export const returnTypeMapForView: { [key in TypeTagEnum]: string } = {
+  Bool: "boolean",
+  U8: "Uint8",
+  U16: "Uint16",
+  U32: "Uint32",
+  U64: "Uint64String",
+  U128: "Uint128String",
+  U256: "Uint256String",
+  AccountAddress: "AccountAddressString",
+  String: "string",
+  Vector: "Array",
+  Option: "Option", // OneOrNone<T>
+  Object: "ObjectAddressString",
+  Signer: "Signer",
+  Generic: "InputTypes",
+  Struct: "Struct",
+};
 
 export const inputTypeMapForView: { [key in TypeTagEnum]: string } = {
   Bool: "boolean",
