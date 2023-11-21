@@ -116,7 +116,7 @@ export function getArgNameMapping(
   funcs.map((func) => {
     const { genericTypeTags, functionSignature } = extractSignature(func.name, sourceCode);
     if (functionSignature === null) {
-      throw new Error(`Could not find function signature for ${func.name}`);
+      // console.warn(`Could not find function signature for ${func.name}`);
     } else {
       const args = extractArguments(functionSignature);
       if (!modulesWithFunctionSignatures[abi.name]) {

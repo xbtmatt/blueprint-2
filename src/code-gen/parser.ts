@@ -52,6 +52,7 @@ import {
   getBoilerplateImports,
   BOILERPLATE_COPYRIGHT,
 } from "../index.js";
+import { lightBlue, lightCyan, lightGreen, lightMagenta, lightRed, red } from "kolorist";
 
 export class CodeGenerator {
   public readonly config: ConfigDictionary;
@@ -242,15 +243,10 @@ export class CodeGenerator {
 
     lines.push(`${viewFunction ? "" : "private"} constructor(`);
     signerArguments.forEach((signerArgument, i) => {
-      if (this.config.includeAccountParams) {
-        // TODO: Add support for adding an Account directly in the constructor..?
-        constructorSenders.push(`${signerArgumentNames[i]}: Account, // ${signerArgument.annotation}`);
-      } else {
-        // signers are `AccountAddress` in the constructor signature because we're just generating the raw transaction here.
-        constructorSenders.push(
-          `${signerArgumentNames[i]}: ${accountAddressInputString}, // ${signerArgument.annotation}`,
-        );
-      }
+      // signers are `AccountAddress` in the constructor signature because we're just generating the raw transaction here.
+      constructorSenders.push(
+        `${signerArgumentNames[i]}: ${accountAddressInputString}, // ${signerArgument.annotation}`,
+      );
     });
     // If this is an entry function and the `signer` isn't included in the entry function arguments,
     // we still need to set the primarySender class field in the constructor
@@ -271,13 +267,9 @@ export class CodeGenerator {
       constructorOtherArgs.push(`typeTags: ${explicitTypeTagInputs}, ${genericTypeTagsStringAnnotation}`);
     }
     if (!viewFunction) {
-      if (this.config.includeAccountParams) {
-        constructorOtherArgs.push("feePayer?: Account, // optional fee payer account to sponsor the transaction");
-      } else {
-        constructorOtherArgs.push(
-          `feePayer?: ${accountAddressInputString}, // optional fee payer account to sponsor the transaction`,
-        );
-      }
+      constructorOtherArgs.push(
+        `feePayer?: ${accountAddressInputString}, // optional fee payer account to sponsor the transaction`,
+      );
     }
     lines.push(constructorSenders.join("\n"));
     lines.push(constructorOtherArgs.join("\n"));
@@ -346,7 +338,7 @@ export class CodeGenerator {
             accountAddressInputString,
             genericTypeTags,
             noSignerArgEntryFunction,
-            explicitTypeTags,
+            explicitTypeTagInputs,
             genericTypeTagsStringAnnotation,
           ),
         );
@@ -363,7 +355,7 @@ export class CodeGenerator {
             withFeePayer,
             genericTypeTags,
             noSignerArgEntryFunction,
-            explicitTypeTags,
+            explicitTypeTagInputs,
             genericTypeTagsStringAnnotation,
           ),
         );
@@ -389,7 +381,7 @@ export class CodeGenerator {
     accountAddressInputString: string,
     genericTypeTags: Array<string>, // these parsed generic names if they're available, we just use them for counting
     noSignerArgEntryFunction: boolean,
-    explicitTypeTags: string,
+    explicitTypeTagInputs: string,
     genericTypeTagAnnotation: string,
   ) {
     const isViewFunction = false;
@@ -436,7 +428,7 @@ export class CodeGenerator {
       "aptosConfig: AptosConfig,\n" +
       (constructorSenders.join("\n") + "\n") +
       (constructorOtherArgs.slice(0, -1).join("\n") + "\n") +
-      (withTypeTags ? `typeTags: ${explicitTypeTags}, ${genericTypeTagAnnotation},\n` : "") +
+      (withTypeTags ? `typeTags: ${explicitTypeTagInputs}, ${genericTypeTagAnnotation},\n` : "") +
       (withFeePayer ? "feePayer:" + accountAddressInputString + ",\n" : "") +
       `options?: InputGenerateTransactionOptions,\n` +
       `): Promise<${returnType}> {` +
@@ -480,7 +472,7 @@ export class CodeGenerator {
     withFeePayer: boolean,
     genericTypeTags: Array<string>, // these parsed generic names if they're available, we just use them for counting
     noSignerArgEntryFunction: boolean,
-    explicitTypeTags: string,
+    explicitTypeTagInputs: string,
     genericTypeTagAnnotation: string,
   ) {
     const isViewFunction = false;
@@ -526,7 +518,7 @@ export class CodeGenerator {
       "aptosConfig: AptosConfig,\n" +
       (constructorSenders.join("\n") + "\n") +
       (constructorOtherArgs.slice(0, -1).join("\n") + "\n") +
-      (withTypeTags ? `typeTags: ${explicitTypeTags}, ${genericTypeTagAnnotation}\n` : "") +
+      (withTypeTags ? `typeTags: ${explicitTypeTagInputs}, ${genericTypeTagAnnotation}\n` : "") +
       (withFeePayer ? "feePayer: Account,\n" : "") +
       "options?: InputGenerateTransactionOptions,\n" +
       "waitForTransactionOptions?: WaitForTransactionOptions,\n" +
@@ -570,7 +562,6 @@ export class CodeGenerator {
   getClassArgTypes(
     typeTags: Array<TypeTag>,
     genericTypeParams: Array<MoveFunctionGenericTypeParam>,
-    replaceOptionWithVector = true,
   ): EntryFunctionArgumentSignature {
     const signerArguments = new Array<AnnotatedBCSArgument>();
     const functionArguments = new Array<AnnotatedBCSArgument>();
@@ -615,6 +606,15 @@ export class CodeGenerator {
             // so we'll remove the second to last kind, since it's an Object
             flattenedTypeTag.pop();
           }
+        }
+
+        let asdf;
+        try {
+          asdf = toClassesString(flattenedTypeTag);
+        } catch (e) {
+          flattenedTypeTag.forEach((t) => console.log(t.toString()));
+          console.log(asdf);
+          console.warn(e);
         }
 
         functionArguments.push({
@@ -681,7 +681,30 @@ export class CodeGenerator {
             codeForFunctionsWithAnyVisibility[i].push(
               ...functions.map((func) => {
                 try {
+                  func.params = func.params.map((param) => {
+                    if (param.startsWith("&mut ")) {
+                      console.warn(
+                        `${lightRed("Removing")} deprecated &mut in typetag ${lightMagenta(
+                          param,
+                        )} in function ${lightMagenta(func.name)}`,
+                      );
+                      return param.replace("&mut ", "");
+                    }
+                    return param;
+                  });
                   const typeTags = func.params.map((param) => parseTypeTag(param, { allowGenerics: true }));
+                  if (
+                    typeTags.find((typeTag) => {
+                      return typeTag.isStruct() && !typeTag.isObject() && !typeTag.isString() && !typeTag.isOption();
+                    })
+                  ) {
+                    console.warn(
+                      `${lightRed("Ignoring")} function ${lightMagenta(
+                        func.name,
+                      )} because it has a deprecated struct type tag`,
+                    );
+                    return;
+                  }
                   const generatedClassesCode = this.metaclassBuilder({
                     moduleAddress: abiFunction.moduleAddress,
                     moduleName: abiFunction.moduleName,
@@ -703,8 +726,8 @@ export class CodeGenerator {
                 } catch (e) {
                   if (func.params.find((param) => param.startsWith("&0x"))) {
                     console.warn(
-                      `Ignoring deprecated parameter ${func.params.find((param) =>
-                        param.startsWith("&0x"),
+                      `${lightRed("Ignoring")} deprecated parameter ${lightMagenta(
+                        func.params.find((param) => param.startsWith("&0x"))!,
                       )} in function ${func.name}`,
                     );
                   } else {

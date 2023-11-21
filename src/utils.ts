@@ -11,6 +11,7 @@ import {
   Account,
   MoveVector,
   UserTransactionResponse,
+  ParsingError,
 } from "@aptos-labs/ts-sdk";
 import pako from "pako";
 import { toClassString, toTypeTagEnum } from "./code-gen/index.js";
@@ -36,7 +37,16 @@ export function toCamelCase(input: string): string {
  * @returns original source code in plain text
  */
 export function transformCode(source: string): string {
-  return pako.ungzip(Hex.fromHexInput(source).toUint8Array(), { to: "string" });
+  try {
+    return pako.ungzip(Hex.fromHexInput(source).toUint8Array(), { to: "string" });
+  } catch (e) {
+    if (e instanceof ParsingError) {
+      if (e.message.includes("Hex string is too short")) {
+        return "";
+      }
+    }
+    throw e;
+  }
 }
 
 export async function fetchModuleABIs(aptos: Aptos, accountAddress: AccountAddress) {

@@ -1,6 +1,7 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
+import { AccountAddress } from "@aptos-labs/ts-sdk";
 import fs from "fs";
 import yaml from "js-yaml";
 
@@ -21,7 +22,6 @@ export type ConfigDictionary = {
   functionComments: boolean;
   expandedStructs: boolean; // 0x1::string::String vs String, 0x1::option::Option vs Option, etc
   replaceNamedAddresses: boolean; // replace named addresses with their address values in types, e.g. Object<0xbeefcafe::some_resource::Resource> => Object<my_address::some_resource::Resource>
-  includeAccountParams: boolean;
   entryFunctionsNamespace: string;
   viewFunctionsNamespace: string;
   separateViewAndEntryFunctionsByNamespace: boolean;
@@ -37,7 +37,6 @@ export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
     functionComments: true,
     expandedStructs: false,
     replaceNamedAddresses: true,
-    includeAccountParams: true,
     entryFunctionsNamespace: "EntryFuncs",
     viewFunctionsNamespace: "ViewFuncs",
     separateViewAndEntryFunctionsByNamespace: true,
@@ -54,9 +53,11 @@ export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
   const namedAddresses = config.namedAddresses;
   if (namedAddresses !== undefined) {
     Object.keys(namedAddresses).forEach((key) => {
-      const address = namedAddresses[key as any];
-      delete namedAddresses[key as any];
-      namedAddresses[`${key}` as any] = address;
+      const address = namedAddresses[key];
+      delete namedAddresses[key];
+      // normalize the address key
+      const normalizedKey = AccountAddress.fromRelaxed(key).toString();
+      namedAddresses[normalizedKey] = address;
     });
   }
   config.namedAddresses = namedAddresses;
