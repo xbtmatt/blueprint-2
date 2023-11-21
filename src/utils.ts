@@ -16,6 +16,8 @@ import pako from "pako";
 import { toClassString, toTypeTagEnum } from "./code-gen/index.js";
 import fs from "fs";
 
+export const FUND_AMOUNT = 100_000_000;
+
 export function toPascalCase(input: string): string {
   return input
     .split("_")
@@ -93,18 +95,6 @@ export function copyCode(readPath: string, writePath: string, sdkPath = "@aptos-
     fs.writeFileSync(writePath, newContents, "utf8");
   }
 }
-
-/**
- * Sleep the current thread for the given amount of time
- * @param timeMs time in milliseconds to sleep
- */
-export async function sleep(timeMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, timeMs);
-  });
-}
-
-export const FUND_AMOUNT = 100_000_000;
 
 // Instead of funding each account individually, we fund one twice, then send coins from it to the rest
 // This results in 2 fund requests and 1 transaction instead of N fund requests. For running tests,

@@ -7,7 +7,6 @@ import {
   MoveFunctionGenericTypeParam,
   TypeTag,
   parseTypeTag,
-  TypeTagVector,
   TypeTagAddress,
   TypeTagSigner,
 } from "@aptos-labs/ts-sdk";
@@ -37,9 +36,7 @@ import {
   FEE_PAYER_FIELD_NAME,
   SECONDARY_SENDERS_FIELD_NAME,
   MODULE_ADDRESS_FIELD_NAME,
-  R_PARENTHESIS,
   TransactionType,
-  InputTransactionType,
   EntryFunctionTransactionBuilder,
   toViewFunctionReturnTypeString,
 } from "../index.js";
@@ -54,19 +51,6 @@ import {
   getBoilerplateImports,
   BOILERPLATE_COPYRIGHT,
 } from "../index.js";
-import {
-  blue,
-  red,
-  yellow,
-  green,
-  white,
-  lightGreen,
-  ansi256Bg,
-  ansi256,
-  lightBlue,
-  lightMagenta,
-  lightYellow,
-} from "kolorist";
 
 export class CodeGenerator {
   public readonly config: ConfigDictionary;
@@ -83,12 +67,12 @@ export class CodeGenerator {
       functionName,
       className,
       functionArgumentTypeTags,
-      displaySignerArgsAsComments,
       returnValue,
       suppliedFieldNames,
       visibility,
       genericTypeParams,
       documentation,
+      viewFunction,
     } = args;
     const returnValueAsString =
       (returnValue.length > 0 ? ": " : "") +
@@ -115,9 +99,6 @@ export class CodeGenerator {
         return t.split(":")[0].trim();
       });
 
-    // Match the generic type tags with their corresponding generic type params
-
-    const viewFunction = args.viewFunction ?? false;
     const fieldNames = suppliedFieldNames ?? [];
 
     // Check if the user supplied field names
@@ -141,7 +122,6 @@ export class CodeGenerator {
     }
 
     // ------------------------------ Handle signers ------------------------------ //
-    // console.log(genericTypeTags);
     // Get the array of annotated BCS class names, their string representation, and original TypeTag string
     const { signerArguments, functionArguments, genericsWithAbilities } = this.getClassArgTypes(
       functionArgumentTypeTags,
@@ -236,8 +216,7 @@ export class CodeGenerator {
       public readonly moduleName = "${moduleName}";
       public readonly functionName = "${functionName}";
       public readonly args: ${functionArguments.length > 0 ? argsType : "{ }"};
-      public readonly typeTags: Array<TypeTag> = []; ${atleastOneGeneric ? `// ${genericTypeTagsString}` : ""}` +
-      "\n" +
+      public readonly typeTags: Array<TypeTag> = []; ${atleastOneGeneric ? `// ${genericTypeTagsString}` : ""}\n` +
       // only add senders if it's an entry function
       (viewFunction
         ? ""
@@ -298,10 +277,10 @@ export class CodeGenerator {
     }
     lines.push(constructorSenders.join("\n"));
     lines.push(constructorOtherArgs.join("\n"));
-    lines.push(`) {`);
+    lines.push(") {");
 
     // ------------------------------ Assign constructor fields to class fields ------------------------------ //
-    lines.push(`super();`);
+    lines.push("super();");
     const signerArgumentNamesAsClasses = signerArgumentNames.map(
       (signerArgumentName) => `AccountAddress.fromRelaxed(${signerArgumentName})`,
     );
@@ -317,7 +296,7 @@ export class CodeGenerator {
       lines.push(signerArguments.length > 1 ? secondarySenderAssignment : "");
     }
 
-    lines.push(`this.args = {`);
+    lines.push("this.args = {");
     functionArguments.forEach((_, i) => {
       // Don't use BCS classes for view functions, since they don't need to be serialized
       // Although we can use them eventually when view functions accepts BCS inputs
@@ -337,10 +316,10 @@ export class CodeGenerator {
         lines.push(`${fieldNames[i]}: ${entryFunctionInputTypeConverter},`);
       }
     });
-    lines.push(`}`);
+    lines.push("}");
     if (genericTypeTagsString) {
       lines.push(
-        `this.typeTags = typeTags.map(typeTag => typeof typeTag === 'string' ? parseTypeTag(typeTag) : typeTag);`,
+        "this.typeTags = typeTags.map(typeTag => typeof typeTag === 'string' ? parseTypeTag(typeTag) : typeTag);",
       );
     }
     if (!viewFunction) {
@@ -348,7 +327,7 @@ export class CodeGenerator {
         `this.${FEE_PAYER_FIELD_NAME} = (${FEE_PAYER_FIELD_NAME} !== undefined) ? AccountAddress.fromRelaxed(${FEE_PAYER_FIELD_NAME}) : undefined;`,
       );
     }
-    lines.push(`}`);
+    lines.push("}");
 
     if (!viewFunction) {
       const withAndWithoutFeePayer = [true, false];
@@ -382,7 +361,7 @@ export class CodeGenerator {
         );
       });
     }
-    lines.push(`\n } \n`);
+    lines.push("\n } \n");
     return lines.join("\n");
   }
 
@@ -450,15 +429,14 @@ export class CodeGenerator {
 
     const returnType = EntryFunctionTransactionBuilder.name;
     const staticBuild =
-      `` +
-      `static async builder${withFeePayer ? "WithFeePayer" : ""}(\n` + // static async builderWithFeePayer(
-      "aptosConfig: AptosConfig,\n" + //    aptosConfig: AptosConfig,
-      (constructorSenders.join("\n") + "\n") + //    ...etc
+      `static async builder${withFeePayer ? "WithFeePayer" : ""}(\n` +
+      "aptosConfig: AptosConfig,\n" +
+      (constructorSenders.join("\n") + "\n") +
       (constructorOtherArgs.slice(0, -1).join("\n") + "\n") +
       (withTypeTags ? "typeTags: Array<TypeTag>,\n" : "") +
       (withFeePayer ? "feePayer:" + accountAddressInputString + ",\n" : "") +
       `options?: InputGenerateTransactionOptions,\n` +
-      `): Promise<${returnType}> {` + // ): Promise<ReturnType> {
+      `): Promise<${returnType}> {` +
       `const payloadBuilder = new this(` +
       constructorSenders.map((s) => s.split(":")[0]).join(",\n") +
       conditionalCommaAndNewLine +
@@ -538,24 +516,20 @@ export class CodeGenerator {
     const conditionalCommaAndNewLineFeePayer = constructorOtherArgs.length > 0 ? ",\n" : "";
 
     const transactionBuilderFunctionSignature =
-      `` +
-      `static async submit${withFeePayer ? "WithFeePayer" : ""}(` + // static async submitWithFeePayer(
+      `static async submit${withFeePayer ? "WithFeePayer" : ""}(` +
       "\n" +
-      `aptosConfig: AptosConfig,\n` +
+      "aptosConfig: AptosConfig,\n" +
       (constructorSenders.join("\n") + "\n") +
       (constructorOtherArgs.slice(0, -1).join("\n") + "\n") +
       (withTypeTags ? "typeTags: Array<TypeTag>,\n" : "") +
       (withFeePayer ? "feePayer: Account,\n" : "") +
-      `options?: InputGenerateTransactionOptions,\n` +
-      `waitForTransactionOptions?: WaitForTransactionOptions,\n` +
-      `): Promise<UserTransactionResponse> {` + // ): Promise<UserTransactionResponse> {
-      "\n";
+      "options?: InputGenerateTransactionOptions,\n" +
+      "waitForTransactionOptions?: WaitForTransactionOptions,\n" +
+      "): Promise<UserTransactionResponse> {\n";
 
     const transactionBuilderInstantiationString =
-      `` +
-      `const transactionBuilder = await ${className}.builder${withFeePayer ? "WithFeePayer" : ""}(` +
-      "\n" +
-      `aptosConfig,\n` +
+      `const transactionBuilder = await ${className}.builder${withFeePayer ? "WithFeePayer" : ""}(\n` +
+      "aptosConfig,\n" +
       constructorSenders.map((s) => `${s.split(":")[0]}.accountAddress`).join(",\n") +
       conditionalCommaAndNewLine +
       constructorOtherArgs
@@ -563,35 +537,27 @@ export class CodeGenerator {
         .slice(0, -1)
         .join(",\n") +
       conditionalCommaAndNewLineOtherArgs +
-      (withTypeTags ? `typeTags,\n` : "") +
+      (withTypeTags ? "typeTags,\n" : "") +
       (withFeePayer ? "feePayer.accountAddress" + conditionalCommaAndNewLineFeePayer : "") +
-      `options,\n` +
-      `);`;
+      "options,\n" +
+      ");";
     const transactionBuilderHelperString =
       `` +
-      `${transactionBuilderFunctionSignature}` +
-      "\n" +
-      `${transactionBuilderInstantiationString}` +
-      "\n" +
-      `const response = await transactionBuilder.submit({` +
-      "\n" +
-      `primarySigner: ${constructorSenders[0].split(":")[0]}` +
-      ",\n" +
+      `${transactionBuilderFunctionSignature}\n` +
+      `${transactionBuilderInstantiationString}\n` +
+      "const response = await transactionBuilder.submit({\n" +
+      `primarySigner: ${constructorSenders[0].split(":")[0]},\n` +
       (withSecondarySenders
         ? `secondarySigners: [${constructorSenders
             .slice(1)
             .map((s) => s.split(":")[0])
             .join(", ")}]` + ",\n"
         : "") +
-      (withFeePayer ? `feePayer,` + "\n" : "") +
-      `options: waitForTransactionOptions,` +
-      "\n" +
-      `});` +
-      "\n" +
-      `return response;` +
-      "\n" +
-      `}` +
-      "\n";
+      (withFeePayer ? "feePayer,\n" : "") +
+      "options: waitForTransactionOptions,\n" +
+      "});\n" +
+      "return response;\n" +
+      "}\n";
 
     return transactionBuilderHelperString;
   }
@@ -646,31 +612,9 @@ export class CodeGenerator {
           }
         }
 
-        let endFlattenedTypeTag: Array<TypeTag> = flattenedTypeTag;
-
-        // Replacing the Option with a Vector is useful for the constructor input types since
-        // ultimately it's the same serialization, and we can restrict the number of elements
-        // with the input type at compile time.
-        if (replaceOptionWithVector) {
-          endFlattenedTypeTag = flattenedTypeTag.map((tag) => {
-            // we no longer need this, because we just convert it in the mapping in `conversions.ts`
-            // if (tag.isStruct() && tag.isOption()) {
-            // Options must always have only 1 type, so we can just pop the first generic typeArg off
-            // and reconstructor a TypeTagVector with it
-            // return new TypeTagVector(tag.value.typeArgs[0]);
-            // }
-            return tag;
-          });
-        } else {
-          // the only time we have a GenericType at the end is when it's for the actual argument.
-          // since we pop the argument off if it's an Object<T>, we can assume that it's an actual
-          // generic argument that the developer will have to serialize themselves.
-
-          console.log("is a generic type tag ?" + endFlattenedTypeTag[flattenedTypeTag.length - 1].isGeneric());
-        }
         functionArguments.push({
-          typeTagArray: endFlattenedTypeTag,
-          classString: toClassesString(endFlattenedTypeTag),
+          typeTagArray: flattenedTypeTag,
+          classString: toClassesString(flattenedTypeTag),
           annotation,
         });
       }
@@ -742,7 +686,6 @@ export class CodeGenerator {
                     genericTypeTags: func.genericTypes,
                     viewFunction: func.is_view,
                     returnValue: func.return,
-                    displaySignerArgsAsComments: true,
                     suppliedFieldNames: func.argNames,
                     visibility: func.visibility as "public" | "private",
                     genericTypeParams: func.generic_type_params,
@@ -760,12 +703,6 @@ export class CodeGenerator {
                       )} in function ${func.name}`,
                     );
                   } else {
-                    const typeTags = func.params.map((param) => parseTypeTag(param, { allowGenerics: true }));
-                    // console.log(func.genericTypes);
-                    // console.log(typeTags.map((typeTag) => typeTag.toString()));
-                    // console.log(abiFunction.moduleAddress.toString());
-                    // console.log(abiFunction.moduleName);
-                    // console.log(func.name);
                     console.error(e);
                   }
                 }

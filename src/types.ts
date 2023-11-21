@@ -158,11 +158,10 @@ export type codeGeneratorOptions = {
   functionArgumentTypeTags: Array<TypeTag>;
   genericTypeTags: string | null; // as a string, not parsed yet
   genericTypeParams: Array<MoveFunctionGenericTypeParam>;
-  viewFunction?: boolean;
+  viewFunction: boolean;
   returnValue: Array<string>;
-  displaySignerArgsAsComments?: boolean;
   suppliedFieldNames?: Array<string>;
-  visibility?: "public" | "private";
+  visibility: "public" | "private";
   documentation?: {
     displayFunctionSignature?: boolean;
     fullStructNames?: boolean;
