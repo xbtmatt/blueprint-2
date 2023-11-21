@@ -417,14 +417,14 @@ describe("various transaction arguments", () => {
       type OptionVec<T> = {
         vec: T;
       }
-      
+
       type ViewComplexArgumentsPayloadMoveArguments = {
         deeply_nested_1: Array<HexInput>;
         deeply_nested_2: Array<Array<ObjectAddressStruct>>;
         deeply_nested_3: Array<OptionVec<Array<ObjectAddressStruct>>>;
         deeply_nested_4: Array<Array<Array<Array<ObjectAddressStruct>>>>;
       };
-      
+
       const toObjectAddressStruct = (argA: ObjectAddress) => {
         return {
           inner: AccountAddress.fromRelaxed(argA).toString(),
@@ -450,7 +450,7 @@ describe("various transaction arguments", () => {
       }
       ),
       deeply_nested_4: [],
-      
+
       // TODO: Fix Option output to be `vec: []`, currently it's trying to cast it to an array of one element I think
       // this is specifically for the response outputs
       console.log(JSON.stringify(viewComplexOutputs, null, 3));

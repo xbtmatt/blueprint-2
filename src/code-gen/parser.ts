@@ -140,24 +140,35 @@ export class CodeGenerator {
       );
     }
 
-    // --------------- Handle signers --------------- //
+    // ------------------------------ Handle signers ------------------------------ //
     // console.log(genericTypeTags);
     // Get the array of annotated BCS class names, their string representation, and original TypeTag string
     const { signerArguments, functionArguments, genericsWithAbilities } = this.getClassArgTypes(
       functionArgumentTypeTags,
       genericTypeParams,
     );
+
+    // ------------------------------ Match generic type tags ------------------------------ //
     // convert T0, T1, etc to named generic type tags if they exist
-    functionArguments.forEach((functionArgument, i) => {
-      const whichGeneric = `T${i}`;
-      functionArguments[i].annotation = functionArguments[i].annotation.replace(whichGeneric, genericTypeTags[i]);
+    // Example:
+    //  with [V, T] we pop `T` off and replace `T0` with it
+    //  then we pop `V` off and replace `T1` with it
+    const genericTypeTagStringsReversed = genericTypeTags.slice().reverse();
+    functionArguments.forEach((_, i) => {
+      functionArguments[i].annotation = truncatedTypeTagString({
+        typeTag: functionArguments[i].typeTagArray[0],
+        namedAddresses: this.config.namedAddresses,
+        namedTypeTags: this.config.namedTypeTags,
+        genericTypeTagsReversed: genericTypeTagStringsReversed,
+      });
     });
+
     const lines: Array<string> = [];
 
     const argsType = `${className}PayloadMoveArguments`;
     const signerArgumentNames = suppliedFieldNames ? suppliedFieldNames.splice(0, signerArguments.length) : [];
 
-    // ---------- Declare class field types separately ---------- //
+    // ------------------------------ Declare class field types separately ------------------------------ //
     if (functionArguments.length > 0) {
       lines.push(`export type ${argsType} = {`);
       functionArguments.forEach((functionArgument, i) => {
@@ -177,7 +188,7 @@ export class CodeGenerator {
     }
     lines.push("");
 
-    // ---------- Documentation --------- //
+    // ------------------------------ Documentation ------------------------------ //
     const atleastOneGeneric = (genericTypeTagsString ?? "").length > 0;
     const leftCaret = atleastOneGeneric ? "<" : "";
     const rightCaret = atleastOneGeneric ? ">" : "";
@@ -238,7 +249,7 @@ export class CodeGenerator {
     lines.push(classFields);
     lines.push("\n");
 
-    // -------- Constructor input types -------- //
+    // ------------------------------ Constructor input types ------------------------------ //
     // constructor fields
     const constructorSenders = new Array<string>();
     const constructorOtherArgs = new Array<string>();
@@ -289,7 +300,7 @@ export class CodeGenerator {
     lines.push(constructorOtherArgs.join("\n"));
     lines.push(`) {`);
 
-    // -------- Assign constructor fields to class fields -------- //
+    // ------------------------------ Assign constructor fields to class fields ------------------------------ //
     lines.push(`super();`);
     const signerArgumentNamesAsClasses = signerArgumentNames.map(
       (signerArgumentName) => `AccountAddress.fromRelaxed(${signerArgumentName})`,
@@ -311,7 +322,6 @@ export class CodeGenerator {
       // Don't use BCS classes for view functions, since they don't need to be serialized
       // Although we can use them eventually when view functions accepts BCS inputs
       if (viewFunction) {
-        // lines.push(`${fieldNames[i]}: ${functionArguments[i].kindArray},`);
         const viewFunctionInputTypeConverter = transformViewFunctionInputTypes(
           fieldNames[i],
           functionArguments[i].typeTagArray,
@@ -377,7 +387,7 @@ export class CodeGenerator {
   }
 
   // TODO: Fix
-  // right now this is non-maintainable and very messy
+  // right now this is non-maintainable and very messy ( this may be the ugliest thing I've ever created )
   // What you should do is create an abstract implementation of build and builderWithFeePayer
   // with the base functionality and then find a way to make `build` and `builderWithFeePayer`
   // implementations in the subclasses by packing the signerArgumentNames into the primarySender
@@ -437,27 +447,19 @@ export class CodeGenerator {
     const conditionalCommaAndNewLineFeePayer = constructorOtherArgs.length > 0 ? ",\n" : "";
 
     const withTypeTags = genericTypeTags.length > 0;
-    const typeTagsInBuildFunctionSignatureString = withTypeTags ? "typeTags: Array<TypeTag>,\n" : "";
-    const typeTagsInConstructorCallString = withTypeTags ? `typeTags,\n` : "";
 
-    // TODO: Fix this later
-    // const returnType = withFeePayer
-    //   ? InputTransactionType.FeePayer
-    //   : withSecondarySenders
-    //     ? InputTransactionType.MultiAgent
-    //     : InputTransactionType.SingleSigner;
     const returnType = EntryFunctionTransactionBuilder.name;
     const staticBuild =
       `` +
-      `static async builder${withFeePayer ? "WithFeePayer" : ""}(\n` +
-      "aptosConfig: AptosConfig,\n" +
-      (constructorSenders.join("\n") + "\n") +
+      `static async builder${withFeePayer ? "WithFeePayer" : ""}(\n` + // static async builderWithFeePayer(
+      "aptosConfig: AptosConfig,\n" + //    aptosConfig: AptosConfig,
+      (constructorSenders.join("\n") + "\n") + //    ...etc
       (constructorOtherArgs.slice(0, -1).join("\n") + "\n") +
-      typeTagsInBuildFunctionSignatureString +
+      (withTypeTags ? "typeTags: Array<TypeTag>,\n" : "") +
       (withFeePayer ? "feePayer:" + accountAddressInputString + ",\n" : "") +
       `options?: InputGenerateTransactionOptions,\n` +
-      `): Promise<${returnType}> {
-        const payloadBuilder = new this(` +
+      `): Promise<${returnType}> {` + // ): Promise<ReturnType> {
+      `const payloadBuilder = new this(` +
       constructorSenders.map((s) => s.split(":")[0]).join(",\n") +
       conditionalCommaAndNewLine +
       constructorOtherArgs
@@ -465,7 +467,7 @@ export class CodeGenerator {
         .map((s) => s.split(":")[0])
         .join(",\n") +
       conditionalCommaAndNewLineOtherArgs +
-      typeTagsInConstructorCallString +
+      (withTypeTags ? `typeTags,\n` : "") +
       (withFeePayer ? constructorOtherArgs.pop()?.split("?:")[0] + conditionalCommaAndNewLineFeePayer : "") +
       `);
         const rawTransactionInput = (await buildTransaction({
@@ -529,35 +531,24 @@ export class CodeGenerator {
     );
 
     const withSecondarySenders = signerArguments.length > 1;
-    const singleSigner = signerArguments.length === 1;
-    const transactionType = withFeePayer
-      ? TransactionType.FeePayer
-      : withSecondarySenders
-        ? TransactionType.MultiAgent
-        : TransactionType.SingleSigner;
+    const withTypeTags = genericTypeTags.length > 0;
 
     const conditionalCommaAndNewLine = constructorSenders.length > 0 ? ",\n" : "";
     const conditionalCommaAndNewLineOtherArgs = constructorOtherArgs.slice(0, -1).length > 0 ? ",\n" : "";
     const conditionalCommaAndNewLineFeePayer = constructorOtherArgs.length > 0 ? ",\n" : "";
 
-    const withTypeTags = genericTypeTags.length > 0;
-    const typeTagsInBuildFunctionSignatureString = withTypeTags ? "typeTags: Array<TypeTag>,\n" : "";
-    const typeTagsInConstructorCallString = withTypeTags ? `typeTags,\n` : "";
-
-    const returnType = EntryFunctionTransactionBuilder.name;
-
     const transactionBuilderFunctionSignature =
       `` +
-      `static async submit${withFeePayer ? "WithFeePayer" : ""}(` +
+      `static async submit${withFeePayer ? "WithFeePayer" : ""}(` + // static async submitWithFeePayer(
       "\n" +
       `aptosConfig: AptosConfig,\n` +
       (constructorSenders.join("\n") + "\n") +
       (constructorOtherArgs.slice(0, -1).join("\n") + "\n") +
-      typeTagsInBuildFunctionSignatureString +
+      (withTypeTags ? "typeTags: Array<TypeTag>,\n" : "") +
       (withFeePayer ? "feePayer: Account,\n" : "") +
       `options?: InputGenerateTransactionOptions,\n` +
       `waitForTransactionOptions?: WaitForTransactionOptions,\n` +
-      `): Promise<UserTransactionResponse> {` +
+      `): Promise<UserTransactionResponse> {` + // ): Promise<UserTransactionResponse> {
       "\n";
 
     const transactionBuilderInstantiationString =
@@ -633,7 +624,7 @@ export class CodeGenerator {
         // It's a non-signer entry function argument, so we'll add it to the functionArguments array
       } else {
         // Check if the TypeTag is actually an Object type
-        // Object<T> must have at least 2 types, so if the length is 1, it's not an Object
+        // Object<T> must have at least 2 typetags, so if the length is 1, it's not an Object
         if (flattenedTypeTag.length > 1) {
           const secondToLast = flattenedTypeTag[flattenedTypeTag.length - 2];
           if (flattenedTypeTag[flattenedTypeTag.length - 1].isGeneric()) {
@@ -642,20 +633,11 @@ export class CodeGenerator {
             // 2, because that's the length of ": ". We don't add it if there are no constraints
             const genericTypeWithConstraints = constraints.length > 2 ? `${genericType}${constraints}` : genericType;
             // Check if the second to last kind is an AccountAddress, because that's *always* an Object
-            // if (kindArray[kindArray.length - 2] === AccountAddress.kind) {
             if (secondToLast.isStruct() && secondToLast.isObject()) {
               genericsWithAbilities.push(genericTypeWithConstraints);
-              // annotation += `<${genericType}>`;
               flattenedTypeTag.pop();
             } else {
               genericsWithAbilities.push(genericTypeWithConstraints);
-              // The second to last kind is not an Object, so we'll add it to the functionArguments array
-              // this is a generically typed argument, meaning (as of right now, 11-2023), it's a normal
-              // BCS argument            // functionArguments.push({
-              //   kindArray,
-              //   kindString: toClassesString(kindArray),
-              //   annotation,
-              // });
             }
           } else if (secondToLast.isStruct() && secondToLast.isObject()) {
             // it's an Object<T> where T is not generic: aka Object<Token> or something

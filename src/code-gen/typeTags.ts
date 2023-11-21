@@ -19,23 +19,30 @@ export function truncatedTypeTagString(args: {
   typeTag: TypeTag;
   namedAddresses?: Record<string, string>;
   namedTypeTags?: Record<string, string>;
+  genericTypeTagsReversed?: Array<string>;
 }): string {
   const { typeTag } = args;
   const namedAddresses = args.namedAddresses ?? {};
   const namedTypeTags = args.namedTypeTags ?? {};
+  const genericTypeTagsReversed = args.genericTypeTagsReversed ?? [];
 
   if (typeTag.isVector()) {
-    return `vector<${truncatedTypeTagString({ typeTag: typeTag.value, namedAddresses, namedTypeTags })}>`;
+    return `vector<${truncatedTypeTagString({
+      typeTag: typeTag.value,
+      namedAddresses,
+      namedTypeTags,
+      genericTypeTagsReversed,
+    })}>`;
   }
   if (typeTag.isStruct()) {
     if (typeTag.isOption()) {
       return `Option<${typeTag.value.typeArgs
-        .map((typeTag) => truncatedTypeTagString({ typeTag, namedAddresses, namedTypeTags }))
+        .map((typeTag) => truncatedTypeTagString({ typeTag, namedAddresses, namedTypeTags, genericTypeTagsReversed }))
         .join(", ")}>`;
     }
     if (typeTag.isObject()) {
       return `Object<${typeTag.value.typeArgs
-        .map((typeTag) => truncatedTypeTagString({ typeTag, namedAddresses, namedTypeTags }))
+        .map((typeTag) => truncatedTypeTagString({ typeTag, namedAddresses, namedTypeTags, genericTypeTagsReversed }))
         .join(", ")}>`;
     }
     if (typeTag.isString()) {
@@ -49,6 +56,22 @@ export function truncatedTypeTagString(args: {
       return `${namedAddresses[typeTag.value.address.toString()]}::${typeTag.value.moduleName.identifier}::${
         typeTag.value.name.identifier
       }`;
+    }
+  }
+
+  // If we pass in generic type tags, we match them to each type tag `T0`, `T1`, etc.
+  // in order that they appear. We pop the last one off the reversed array each time we match
+  // a generic type tag.
+  // Example:
+  //  with [V, T] we pop `T` off and replace `T0` with it
+  //  then we pop `V` off and replace `T1` with it
+  if (genericTypeTagsReversed && genericTypeTagsReversed.length > 0 && typeTag.isGeneric()) {
+    if (typeTag.toString().match(/T\d+/)) {
+      const genericTypeTag = genericTypeTagsReversed.pop();
+      if (!genericTypeTag) {
+        throw new Error(`Missing a matching generic type tag for ${typeTag.toString()}`);
+      }
+      return genericTypeTag;
     }
   }
   return typeTag.toString();
