@@ -30,7 +30,11 @@ export type ConfigDictionary = {
 
 export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
   let loadedConfig: ConfigDictionary = {
-    namedAddresses: {},
+    namedAddresses: {
+      "0x1": "aptos_framework",
+      "0x3": "aptos_token",
+      "0x4": "aptos_token_objects",
+    },
     namedTypeTags: {},
     structArgs: false,
     outputPath: "./generated/",
@@ -42,7 +46,7 @@ export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
     separateViewAndEntryFunctionsByNamespace: true,
     sdkPath: "@aptos-labs/ts-sdk",
   };
-  if (configFilePath !== undefined) {
+  if (configFilePath !== undefined && configFilePath.length > 0) {
     if (!fs.existsSync(configFilePath)) {
       throw new Error(`Config file not found at ${configFilePath}`);
     }

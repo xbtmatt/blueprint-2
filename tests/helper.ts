@@ -12,7 +12,7 @@ import {
   SimpleEntryFunctionArgumentTypes,
   AccountAddress,
 } from "@aptos-labs/ts-sdk";
-import publishJson from "./move/arguments/publish.json";
+import publishJson from "./move/arguments/publish.json" assert { type: "json" };
 import { ObjectAddressStruct } from "src/boilerplate/types";
 
 export async function publishPackage(
@@ -157,19 +157,24 @@ export const PUBLISHER_ACCOUNT_ADDRESS = "2cca48b8b0d7f77ef28bfd608883c599680c5b
 export const ARGUMENT_TESTS_CONTRACT_METADATA = publishJson.args[0].value as string;
 
 // interpolate a named address into the contract bytecode
-export async function getContractBytecode() {
-  return String(publishJson.args[1].value as string).replaceAll(
-    "0a56e8b03118e51cf88140e5e18d1f764e0a1048c23e7c56bd01bd5b76993451",
-    PUBLISHER_ACCOUNT_ADDRESS,
+export async function getModuleBytecodeStrings() {
+  const modules = Array.isArray(publishJson.args[1].value) ? publishJson.args[1].value : [publishJson.args[1].value];
+  const modulesWithCorrectAddress = modules.map(
+    (module) =>
+      (module = String(module).replaceAll(
+        "0a56e8b03118e51cf88140e5e18d1f764e0a1048c23e7c56bd01bd5b76993451",
+        PUBLISHER_ACCOUNT_ADDRESS,
+      )),
   );
+  return modulesWithCorrectAddress;
 }
 
 export async function publishArgumentTestModule(
   aptos: Aptos,
   senderAccount: Account,
 ): Promise<UserTransactionResponse> {
-  const contractBytecode = await getContractBytecode();
-  const response = await publishPackage(aptos, senderAccount, ARGUMENT_TESTS_CONTRACT_METADATA, [contractBytecode]);
+  const moduleBytecodeStrings = await getModuleBytecodeStrings();
+  const response = await publishPackage(aptos, senderAccount, ARGUMENT_TESTS_CONTRACT_METADATA, moduleBytecodeStrings);
   return response;
 }
 

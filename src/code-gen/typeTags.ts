@@ -19,30 +19,34 @@ export function truncatedTypeTagString(args: {
   typeTag: TypeTag;
   namedAddresses?: Record<string, string>;
   namedTypeTags?: Record<string, string>;
-  genericTypeTagsReversed?: Array<string>;
+  genericTypeTags?: Array<string>;
 }): string {
   const { typeTag } = args;
   const namedAddresses = args.namedAddresses ?? {};
   const namedTypeTags = args.namedTypeTags ?? {};
-  const genericTypeTagsReversed = args.genericTypeTagsReversed ?? [];
+  const genericTypeTags = args.genericTypeTags ?? [];
 
   if (typeTag.isVector()) {
     return `vector<${truncatedTypeTagString({
       typeTag: typeTag.value,
       namedAddresses,
       namedTypeTags,
-      genericTypeTagsReversed,
+      genericTypeTags: genericTypeTags,
     })}>`;
   }
   if (typeTag.isStruct()) {
     if (typeTag.isOption()) {
       return `Option<${typeTag.value.typeArgs
-        .map((typeTag) => truncatedTypeTagString({ typeTag, namedAddresses, namedTypeTags, genericTypeTagsReversed }))
+        .map((typeTag) =>
+          truncatedTypeTagString({ typeTag, namedAddresses, namedTypeTags, genericTypeTags: genericTypeTags }),
+        )
         .join(", ")}>`;
     }
     if (typeTag.isObject()) {
       return `Object<${typeTag.value.typeArgs
-        .map((typeTag) => truncatedTypeTagString({ typeTag, namedAddresses, namedTypeTags, genericTypeTagsReversed }))
+        .map((typeTag) =>
+          truncatedTypeTagString({ typeTag, namedAddresses, namedTypeTags, genericTypeTags: genericTypeTags }),
+        )
         .join(", ")}>`;
     }
     if (typeTag.isString()) {
@@ -65,9 +69,13 @@ export function truncatedTypeTagString(args: {
   // Example:
   //  with [V, T] we pop `T` off and replace `T0` with it
   //  then we pop `V` off and replace `T1` with it
-  if (genericTypeTagsReversed && genericTypeTagsReversed.length > 0 && typeTag.isGeneric()) {
-    if (typeTag.toString().match(/T\d+/)) {
-      const genericTypeTag = genericTypeTagsReversed.pop();
+  if (genericTypeTags && genericTypeTags.length > 0 && typeTag.isGeneric()) {
+    const genericMatch = typeTag.toString().match(/T(\d+)/);
+    if (genericMatch) {
+      const whichGeneric = Number(genericMatch[1]);
+      console.log(typeTag.toString());
+      console.log(`T${whichGeneric}`);
+      const genericTypeTag = genericTypeTags[whichGeneric];
       if (!genericTypeTag) {
         throw new Error(`Missing a matching generic type tag for ${typeTag.toString()}`);
       }

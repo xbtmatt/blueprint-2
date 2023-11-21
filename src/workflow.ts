@@ -1,27 +1,36 @@
 import { red } from "kolorist";
-import prompts from "prompts";
+import prompts, { PromptObject } from "prompts";
 import { Network, AccountAddress } from "@aptos-labs/ts-sdk";
 import fs from "fs";
+import { getCodeGenConfig } from "./code-gen/config.js";
 
 export type Selections = {
   configPath: string;
-  frameworkModules: Array<AccountAddress>;
+  namedModules: Array<AccountAddress>;
   additionalModules: Array<AccountAddress>;
   network: Network;
 };
 
-export function validateConfigPath(value: string) {
-  const exists = fs.existsSync(value);
-  const isYaml = value.endsWith(".yaml");
+export function validateAndSetConfigPath(configPath: string) {
+  if (configPath === "") {
+    return true;
+  }
+  const exists = fs.existsSync(configPath);
+  const isYaml = configPath.endsWith(".yaml");
   if (exists && isYaml) {
     return true;
   }
   const doesntExistMessage = exists ? "" : "File does not exist. ";
-  const isYamlMessage = isYaml ? "" : `${doesntExistMessage.length > 0 ? "and " : ""}${value} is not a yaml file. `;
+  const isYamlMessage = isYaml
+    ? ""
+    : `${doesntExistMessage.length > 0 ? "and " : ""}${configPath} is not a yaml file. `;
   return `Please enter a valid config.yaml file path. ${doesntExistMessage} ${isYamlMessage}`;
 }
 
 export function validateAddresses(value: string) {
+  if (value === "") {
+    return true;
+  }
   const addresses = value.split(",");
   const valid = addresses.every((address) => {
     try {
@@ -45,8 +54,21 @@ export function validateNetwork(value: string) {
   return "Please enter a valid network";
 }
 
+export function generateChoices(configPath: string) {
+  const namedAddresses = getCodeGenConfig(configPath).namedAddresses;
+  const choices = Object.entries(namedAddresses).map(([address, name]) => {
+    const value = AccountAddress.fromRelaxed(address);
+    return {
+      title: name as string,
+      value: value,
+      description: value.toString(),
+    };
+  });
+  return choices;
+}
+
 export async function userInputs() {
-  let result: prompts.Answers<"configPath" | "frameworkModules" | "additionalModules" | "network">;
+  let result: prompts.Answers<"configPath" | "namedModules" | "additionalModules" | "network">;
 
   try {
     result = await prompts(
@@ -54,33 +76,16 @@ export async function userInputs() {
         {
           type: "text",
           name: "configPath",
-          message: "Your config.yaml file path",
-          initial: "./config.yaml",
-          validate: (value: string) => validateConfigPath(value),
+          message: "config.yaml path (leave empty for defaults):",
+          initial: "config.yaml",
+          validate: (value: string) => validateAndSetConfigPath(value),
+          hint: "asdf",
         },
         {
           type: "multiselect",
-          name: "frameworkModules",
-          message: "What framework modules would you like to generate code for?",
-          choices: [
-            {
-              title: "0x1",
-              value: AccountAddress.ONE,
-              description:
-                "The aptos framework modules. This includes account.move, aptos_account.move, code.move, etc.",
-            },
-            {
-              title: "0x3",
-              value: AccountAddress.THREE,
-              description: "The old token.move modules for creating and interacting with legacy tokens.",
-            },
-            {
-              title: "0x4",
-              value: AccountAddress.FOUR,
-              description: "The new Aptos Token Object modules for creating and interacting with token objects.",
-            },
-          ],
-          hint: "- Space to select. Press enter to submit",
+          name: "namedModules",
+          message: "Addresses from config.yaml",
+          choices: (prev) => generateChoices(prev),
         },
         {
           type: "text",
@@ -110,10 +115,10 @@ export async function userInputs() {
     process.exit(0);
   }
 
-  const { configPath, frameworkModules, additionalModules, network } = result;
+  const { configPath, namedModules, additionalModules, network } = result;
   return {
     configPath,
-    frameworkModules,
+    namedModules,
     additionalModules,
     network,
   } as Selections;

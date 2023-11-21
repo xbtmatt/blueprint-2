@@ -76,22 +76,6 @@ export class CodeGenerator {
       documentation,
       viewFunction,
     } = args;
-    const returnValueAsString =
-      (returnValue.length > 0 ? ": " : "") +
-      returnValue
-        .map((v) => {
-          const typeTag = parseTypeTag(v);
-          const replacedTypeTag = this.config.expandedStructs
-            ? typeTag.toString()
-            : truncatedTypeTagString({
-                typeTag,
-                namedAddresses: this.config.namedAddresses,
-                namedTypeTags: this.config.namedTypeTags,
-              });
-          return replacedTypeTag.toString();
-        })
-        .join(", ");
-
     // These are the parsed type tags from the source code
     const genericTypeTagsString = args.genericTypeTags ?? "";
     const genericTypeTags = genericTypeTagsString
@@ -100,6 +84,22 @@ export class CodeGenerator {
       .map((t) => {
         return t.split(":")[0].trim();
       });
+    const returnValueAsString =
+      (returnValue.length > 0 ? ": " : "") +
+      returnValue
+        .map((v) => {
+          const typeTag = parseTypeTag(v, { allowGenerics: true });
+          const replacedTypeTag = this.config.expandedStructs
+            ? typeTag.toString()
+            : truncatedTypeTagString({
+                typeTag,
+                namedAddresses: this.config.namedAddresses,
+                namedTypeTags: this.config.namedTypeTags,
+                genericTypeTags: genericTypeTags,
+              });
+          return replacedTypeTag.toString();
+        })
+        .join(", ");
     const atleastOneGeneric = (genericTypeTagsString ?? "").length > 0;
     const genericTypeTagsStringAnnotation = atleastOneGeneric ? `// [${genericTypeTagsString}]` : "";
     // denote the explicit number of generic TypeTags necessary to call the function
@@ -141,13 +141,12 @@ export class CodeGenerator {
     // Example:
     //  with [V, T] we pop `T` off and replace `T0` with it
     //  then we pop `V` off and replace `T1` with it
-    const genericTypeTagStringsReversed = genericTypeTags.slice().reverse();
     functionArguments.forEach((_, i) => {
       functionArguments[i].annotation = truncatedTypeTagString({
         typeTag: functionArguments[i].typeTagArray[0],
         namedAddresses: this.config.namedAddresses,
         namedTypeTags: this.config.namedTypeTags,
-        genericTypeTagsReversed: genericTypeTagStringsReversed,
+        genericTypeTags: genericTypeTags,
       });
     });
 
@@ -206,7 +205,7 @@ export class CodeGenerator {
     const accountAddressClassString = toClassString(TypeTagEnum.AccountAddress);
 
     const returnTypes = returnValue.map((v) => {
-      const typeTag = parseTypeTag(v);
+      const typeTag = parseTypeTag(v, { allowGenerics: true });
       const flattenedTypeTag = toFlattenedTypeTag(typeTag);
       const inputType = toViewFunctionReturnTypeString(flattenedTypeTag);
       return inputType;

@@ -62,9 +62,9 @@ export function toViewFunctionReturnTypeString(typeTags: Array<TypeTag>): string
     case TypeTagEnum.U128:
     case TypeTagEnum.U256:
     case TypeTagEnum.AccountAddress:
-    case TypeTagEnum.Generic:
     case TypeTagEnum.Signer:
       return mapping[typeTagEnum];
+    case TypeTagEnum.Generic:
     case TypeTagEnum.Struct:
       return "MoveValue";
     default:
