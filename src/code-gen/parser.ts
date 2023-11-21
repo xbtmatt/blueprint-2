@@ -39,6 +39,7 @@ import {
   TransactionType,
   EntryFunctionTransactionBuilder,
   toViewFunctionReturnTypeString,
+  createExplicitArraySizeString,
 } from "../index.js";
 import fs from "fs";
 import { ConfigDictionary } from "./config.js";
@@ -98,6 +99,12 @@ export class CodeGenerator {
       .map((t) => {
         return t.split(":")[0].trim();
       });
+    const atleastOneGeneric = (genericTypeTagsString ?? "").length > 0;
+    const genericTypeTagsStringAnnotation = atleastOneGeneric ? `// [${genericTypeTagsString}]` : "";
+    // denote the explicit number of generic TypeTags necessary to call the function
+    const explicitTypeTagInputs = createExplicitArraySizeString(genericTypeTags.length, "TypeTagInput");
+    const explicitTypeTags = createExplicitArraySizeString(genericTypeTags.length, "TypeTag");
+    const explicitTypeTagsWithDefault = !atleastOneGeneric ? "[] = []" : explicitTypeTags;
 
     const fieldNames = suppliedFieldNames ?? [];
 
@@ -169,7 +176,6 @@ export class CodeGenerator {
     lines.push("");
 
     // ------------------------------ Documentation ------------------------------ //
-    const atleastOneGeneric = (genericTypeTagsString ?? "").length > 0;
     const leftCaret = atleastOneGeneric ? "<" : "";
     const rightCaret = atleastOneGeneric ? ">" : "";
     const extraDocLine = "*```";
@@ -216,7 +222,7 @@ export class CodeGenerator {
       public readonly moduleName = "${moduleName}";
       public readonly functionName = "${functionName}";
       public readonly args: ${functionArguments.length > 0 ? argsType : "{ }"};
-      public readonly typeTags: Array<TypeTag> = []; ${atleastOneGeneric ? `// ${genericTypeTagsString}` : ""}\n` +
+      public readonly typeTags: ${explicitTypeTagsWithDefault}; ${genericTypeTagsStringAnnotation}\n` +
       // only add senders if it's an entry function
       (viewFunction
         ? ""
@@ -262,9 +268,7 @@ export class CodeGenerator {
       constructorOtherArgs.push(`${fieldNames[i]}: ${inputType}, ${argComment}`);
     });
     if (genericTypeTagsString) {
-      constructorOtherArgs.push(
-        `typeTags: Array<TypeTagInput>, ${atleastOneGeneric ? "//" : ""} ${genericTypeTagsString}`,
-      );
+      constructorOtherArgs.push(`typeTags: ${explicitTypeTagInputs}, ${genericTypeTagsStringAnnotation}`);
     }
     if (!viewFunction) {
       if (this.config.includeAccountParams) {
@@ -319,7 +323,7 @@ export class CodeGenerator {
     lines.push("}");
     if (genericTypeTagsString) {
       lines.push(
-        "this.typeTags = typeTags.map(typeTag => typeof typeTag === 'string' ? parseTypeTag(typeTag) : typeTag);",
+        `this.typeTags = typeTags.map(typeTag => typeof typeTag === 'string' ? parseTypeTag(typeTag) : typeTag) as ${explicitTypeTagsWithDefault};`,
       );
     }
     if (!viewFunction) {
@@ -342,6 +346,8 @@ export class CodeGenerator {
             accountAddressInputString,
             genericTypeTags,
             noSignerArgEntryFunction,
+            explicitTypeTags,
+            genericTypeTagsStringAnnotation,
           ),
         );
       });
@@ -357,6 +363,8 @@ export class CodeGenerator {
             withFeePayer,
             genericTypeTags,
             noSignerArgEntryFunction,
+            explicitTypeTags,
+            genericTypeTagsStringAnnotation,
           ),
         );
       });
@@ -381,6 +389,8 @@ export class CodeGenerator {
     accountAddressInputString: string,
     genericTypeTags: Array<string>, // these parsed generic names if they're available, we just use them for counting
     noSignerArgEntryFunction: boolean,
+    explicitTypeTags: string,
+    genericTypeTagAnnotation: string,
   ) {
     const isViewFunction = false;
 
@@ -414,13 +424,6 @@ export class CodeGenerator {
     );
 
     const withSecondarySenders = signerArguments.length > 1;
-    const singleSigner = signerArguments.length === 1;
-    const transactionType = withFeePayer
-      ? TransactionType.FeePayer
-      : withSecondarySenders
-        ? TransactionType.MultiAgent
-        : TransactionType.SingleSigner;
-
     const conditionalCommaAndNewLine = constructorSenders.length > 0 ? ",\n" : "";
     const conditionalCommaAndNewLineOtherArgs = constructorOtherArgs.slice(0, -1).length > 0 ? ",\n" : "";
     const conditionalCommaAndNewLineFeePayer = constructorOtherArgs.length > 0 ? ",\n" : "";
@@ -433,7 +436,7 @@ export class CodeGenerator {
       "aptosConfig: AptosConfig,\n" +
       (constructorSenders.join("\n") + "\n") +
       (constructorOtherArgs.slice(0, -1).join("\n") + "\n") +
-      (withTypeTags ? "typeTags: Array<TypeTag>,\n" : "") +
+      (withTypeTags ? `typeTags: ${explicitTypeTags}, ${genericTypeTagAnnotation},\n` : "") +
       (withFeePayer ? "feePayer:" + accountAddressInputString + ",\n" : "") +
       `options?: InputGenerateTransactionOptions,\n` +
       `): Promise<${returnType}> {` +
@@ -477,6 +480,8 @@ export class CodeGenerator {
     withFeePayer: boolean,
     genericTypeTags: Array<string>, // these parsed generic names if they're available, we just use them for counting
     noSignerArgEntryFunction: boolean,
+    explicitTypeTags: string,
+    genericTypeTagAnnotation: string,
   ) {
     const isViewFunction = false;
     const signerInputString = toInputTypeString([new TypeTagSigner()], isViewFunction);
@@ -521,7 +526,7 @@ export class CodeGenerator {
       "aptosConfig: AptosConfig,\n" +
       (constructorSenders.join("\n") + "\n") +
       (constructorOtherArgs.slice(0, -1).join("\n") + "\n") +
-      (withTypeTags ? "typeTags: Array<TypeTag>,\n" : "") +
+      (withTypeTags ? `typeTags: ${explicitTypeTags}, ${genericTypeTagAnnotation}\n` : "") +
       (withFeePayer ? "feePayer: Account,\n" : "") +
       "options?: InputGenerateTransactionOptions,\n" +
       "waitForTransactionOptions?: WaitForTransactionOptions,\n" +

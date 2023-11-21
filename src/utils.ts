@@ -138,3 +138,11 @@ export async function fundAccounts(aptos: Aptos, accounts: Array<Account>) {
   });
   return response as UserTransactionResponse;
 }
+
+export function createExplicitArraySizeString(size: number, typeString: string) {
+  const types: Array<string> = [];
+  while (types.length < size) {
+    types.push(typeString);
+  }
+  return `[${types.join(", ")}]` as const;
+}
