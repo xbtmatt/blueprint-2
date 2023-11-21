@@ -162,7 +162,12 @@ export class CodeGenerator {
       lines.push(`export type ${argsType} = {`);
       functionArguments.forEach((functionArgument, i) => {
         if (viewFunction) {
-          const viewFunctionInputTypeConverter = toInputTypeString(functionArgument.typeTagArray, viewFunction);
+          const asClassField = true;
+          const viewFunctionInputTypeConverter = toInputTypeString(
+            functionArgument.typeTagArray,
+            viewFunction,
+            asClassField,
+          );
           lines.push(`${fieldNames[i]}: ${viewFunctionInputTypeConverter};`);
         } else {
           lines.push(`${fieldNames[i]}: ${functionArgument.classString};`);
@@ -262,7 +267,7 @@ export class CodeGenerator {
       const inputType = toInputTypeString(functionArgument.typeTagArray, viewFunction);
       // TODO: Fix option input types. It's just converting them to vectors right now, it should be Option<T>, but the input type
       // is skipping the Option part too early. This is probably a result of refactoring to typetags a week ago.
-      console.log(functionArgument.typeTagArray.map((s) => s.toString()).join(", "));
+      // console.log(functionArgument.typeTagArray.map((s) => s.toString()).join(", "));
       const argComment = ` // ${functionArgument.annotation}`;
       constructorOtherArgs.push(`${fieldNames[i]}: ${inputType}, ${argComment}`);
     });
@@ -666,11 +671,12 @@ export class CodeGenerator {
         // with the input type at compile time.
         if (replaceOptionWithVector) {
           endFlattenedTypeTag = flattenedTypeTag.map((tag) => {
-            if (tag.isStruct() && tag.isOption()) {
-              // Options must always have only 1 type, so we can just pop the first generic typeArg off
-              // and reconstructor a TypeTagVector with it
-              return new TypeTagVector(tag.value.typeArgs[0]);
-            }
+            // we no longer need this, because we just convert it in the mapping in `conversions.ts`
+            // if (tag.isStruct() && tag.isOption()) {
+            // Options must always have only 1 type, so we can just pop the first generic typeArg off
+            // and reconstructor a TypeTagVector with it
+            // return new TypeTagVector(tag.value.typeArgs[0]);
+            // }
             return tag;
           });
         } else {

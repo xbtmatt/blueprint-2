@@ -5,17 +5,24 @@ import { TypeTag, TypeTagVector, TypeTagAddress } from "@aptos-labs/ts-sdk";
 import { numberToLetter, toTypeTagEnum, TypeTagEnum, toClassString } from "../index.js";
 import { R_PARENTHESIS } from "../index.js";
 
-export function toInputTypeString(typeTags: Array<TypeTag>, forView: boolean): string {
-  const mapping = forView ? inputTypeMapForView : inputTypeMapForEntry;
+export function toInputTypeString(typeTags: Array<TypeTag>, viewFunction: boolean, asClassField = false): string {
+  const mapping = viewFunction ? inputTypeMapForView : inputTypeMapForEntry;
   const typeTag = typeTags[0];
-  const typeTagEnum = toTypeTagEnum(typeTag);
+  let typeTagEnum = toTypeTagEnum(typeTag);
+  // if we're generating the class fields for a view function, we'll replace Option with Vector
+  if (asClassField && viewFunction && typeTagEnum === TypeTagEnum.Option) {
+    typeTagEnum = TypeTagEnum.Vector;
+  }
   switch (typeTagEnum) {
     case TypeTagEnum.Vector:
       if (typeTags.length === 2 && typeTags[1].isU8()) {
         return "HexInput";
       }
     case TypeTagEnum.Option:
-      return `${mapping[typeTagEnum]}<${toInputTypeString(typeTags.slice(1), forView)}>`;
+      if (viewFunction && !asClassField && typeTags.length === 2 && typeTags[1].isU8()) {
+        return "HexInput";
+      }
+      return `${mapping[typeTagEnum]}<${toInputTypeString(typeTags.slice(1), viewFunction, asClassField)}>`;
     case TypeTagEnum.Bool:
     case TypeTagEnum.U8:
     case TypeTagEnum.U16:
@@ -91,13 +98,18 @@ export function transformEntryFunctionInputTypes(
       // conditionally replace MoveOption with MoveVector for the constructor input types
       let newTypeTag = typeTag;
       let newTypeTagEnum = toTypeTagEnum(typeTag);
-      if (typeTag.isStruct() && typeTag.isOption()) {
+      const isOption = typeTag.isStruct() && typeTag.isOption();
+      if (isOption) {
         newTypeTag = replaceOptionWithVector ? new TypeTagVector(typeTag.value.typeArgs[0]) : typeTag;
         newTypeTagEnum = toTypeTagEnum(newTypeTag);
       }
       const innerNameFromDepth = `arg${numberToLetter(depth + 1)}`;
+      // since we're using `Option<T>` as input values, it may be an element of [] or [T]
+      // so we need to the value to an Array if it's an option:
+      // new MoveVector(Array.from(arg[LETTER]).map(arg[LETTER + 1] => ...)
+      const normalizedNameFromDepth = normalizeOptionNameFromDepth(isOption, nameFromDepth);
       return (
-        `new ${toClassString(newTypeTagEnum)}(${nameFromDepth}.map(${innerNameFromDepth} => ` +
+        `new ${toClassString(newTypeTagEnum)}(${normalizedNameFromDepth}.map(${innerNameFromDepth} => ` +
         `${transformEntryFunctionInputTypes(innerNameFromDepth, typeTags.slice(1), depth + 1)})`
       );
     }
@@ -129,11 +141,11 @@ export function transformViewFunctionInputTypes(fieldName: string, typeTags: Arr
   const typeTagEnum = toTypeTagEnum(typeTag);
   switch (typeTagEnum) {
     case TypeTagEnum.Vector:
-      // if we're at the innermost type and it's a vector<u8>, we'll use the MoveVector.U8(hex: HexInput) factory method
+    case TypeTagEnum.Option: {
+      // if we're at the innermost type and it's a vector<u8>, we'll convert it to a Uint8Array then a string
       if (typeTags.length === 2 && typeTags[1].isU8()) {
         return `Hex.fromHexInput(${nameFromDepth}).toString()${R_PARENTHESIS.repeat(depth)}`;
       }
-    case TypeTagEnum.Option: {
       const innerNameFromDepth = `arg${numberToLetter(depth + 1)}`;
       return (
         `${nameFromDepth}.map(${innerNameFromDepth} => ` +
@@ -159,6 +171,10 @@ export function transformViewFunctionInputTypes(fieldName: string, typeTags: Arr
     default:
       throw new Error(`Unknown typeTag: ${typeTag}`);
   }
+}
+
+export function normalizeOptionNameFromDepth(isOption: boolean, nameFromDepth: string): string {
+  return isOption ? `Array.from(${nameFromDepth})` : nameFromDepth;
 }
 
 export const returnTypeMapForView: { [key in TypeTagEnum]: string } = {

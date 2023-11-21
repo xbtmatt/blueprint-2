@@ -154,9 +154,9 @@ export function toClassString(typeTagEnum: TypeTagEnum): string {
     case TypeTagEnum.String:
       return "MoveString";
     case TypeTagEnum.Vector:
-      return "MoveVector";
     case TypeTagEnum.Option:
-      return "MoveOption";
+      return "MoveVector";
+    // return "MoveOption";
     case TypeTagEnum.Object:
       return "MoveObject";
     case TypeTagEnum.Signer:
