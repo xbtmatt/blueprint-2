@@ -35,6 +35,7 @@ import {
   Uint256,
   TypeTag,
   TransactionEd25519Signature,
+  EntryFunctionPayloadResponse,
 } from "@aptos-labs/ts-sdk";
 import {
   rawTransactionHelper,
@@ -45,7 +46,15 @@ import {
   normalizeObjectAddresses,
   normalizeObjectAddress,
 } from "./helper";
-import { InputTypes, TransactionBuilder, fundAccounts } from "../src";
+import {
+  EntryFunctionPayloadBuilder,
+  EntryFunctionTransactionBuilder,
+  InputTypes,
+  Option,
+  TransactionBuilder,
+  TypeTagInput,
+  fundAccounts,
+} from "../src";
 import { TxArgsModule } from "../generated/args_test_suite";
 import { gray, lightBlue, lightGreen, lightMagenta } from "kolorist";
 import { ObjectAddressStruct } from "src/boilerplate/types";
@@ -82,6 +91,7 @@ describe("various transaction arguments", () => {
   let mixedTransactionArguments: Array<EntryFunctionArgumentTypes | SimpleEntryFunctionArgumentTypes>;
   const EXPECTED_VECTOR_U8 = new Uint8Array([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]);
   const EXPECTED_VECTOR_STRING = ["expected_string", "abc", "def", "123", "456", "789"];
+  let viewArgs: any;
 
   beforeAll(async () => {
     await fundAccounts(aptos, [senderAccount, ...secondarySignerAccounts, feePayerAccount]);
@@ -218,10 +228,40 @@ describe("various transaction arguments", () => {
       moduleObjects[0].toString(),
     ];
 
+    viewArgs = [
+      true,
+      1,
+      2,
+      3,
+      "4",
+      "5",
+      "6",
+      senderAccount.accountAddress.toString(),
+      "This is my favorite string :)",
+      moduleObjects[0].toString(),
+      new Uint8Array([1, 2, 3]),
+      [true, false, true],
+      new Uint8Array([0, 255, 1, 2]),
+      [1, 2, 3, 4],
+      [5, 6, 7, 8],
+      ["9", "10", "11", "12"],
+      ["13", "14", "15", "16"],
+      ["17", "18", "19", "20"],
+      [
+        AccountAddress.ZERO,
+        AccountAddress.ONE,
+        AccountAddress.TWO,
+        AccountAddress.THREE,
+        AccountAddress.FOUR,
+        senderAccount.accountAddress,
+      ].map((a) => a.toString()),
+      ["this", "is", "a", "string"],
+    ];
+
     return true;
   });
 
-  const typeTags = [
+  const tts = [
     "bool",
     "u8",
     "u16",
@@ -253,153 +293,658 @@ describe("various transaction arguments", () => {
     "0x1::option::Option<0x1::string::String>",
     `0x1::option::Option<0x1::object::Object<${PUBLISHER_ACCOUNT_ADDRESS}::tx_args_module::EmptyResource>>`,
     `vector<vector<0x1::option::Option<vector<0x1::option::Option<0x1::object::Object<${PUBLISHER_ACCOUNT_ADDRESS}::tx_args_module::EmptyResource>>>>>>`,
-  ].map((s) => parseTypeTag(s));
+  ];
 
   describe("all builder paths", () => {
-    it("tests type_tags, a function with 31 complex type tags", async () => {
-      await testAllBuilderPaths({
-        aptos,
-        senderAccount,
-        cls: TxArgsModule.TypeTags,
-        typeArgs: typeTags,
-        functionArguments: [],
-        secondarySignerAccounts: [],
-        feePayer: feePayerAccount,
+    describe("tests type_tags, a function with 31 complex type tags", () => {
+      let baseBuilder: EntryFunctionTransactionBuilder;
+      const typeTags = tts as [
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+        TypeTagInput,
+      ];
+
+      // We use the base builders to check the fully qualified function call name- not fee payer/secondary signers
+      beforeAll(async () => {
+        baseBuilder = await TxArgsModule.TypeTags.builder(aptos.config, senderAccount.accountAddress, typeTags);
+      });
+
+      it("builds with no fee payer", async () => {
+        const builder = baseBuilder;
+        const response = await builder.submit({
+          primarySigner: senderAccount,
+        });
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
+      });
+      it("builds with a fee payer", async () => {
+        const builder = await TxArgsModule.TypeTags.builder(
+          aptos.config,
+          senderAccount.accountAddress,
+          typeTags,
+          feePayerAccount.accountAddress,
+        );
+        const response = await builder.submit({
+          primarySigner: senderAccount,
+          feePayer: feePayerAccount,
+        });
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+            feePayer: feePayerAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
+      });
+      it("combines build/submit and successfully submits", async () => {
+        const response = await TxArgsModule.TypeTags.submit(aptos.config, senderAccount, typeTags);
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
+      });
+      it("combines build/submit and successfully submits with a fee payer", async () => {
+        const response = await TxArgsModule.TypeTags.submit(aptos.config, senderAccount, typeTags, feePayerAccount);
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+            feePayer: feePayerAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
       });
     });
-    it("tests public_arguments, a function with all argument types except `&signer`", async () => {
-      await testAllBuilderPaths({
-        aptos,
-        senderAccount,
-        cls: TxArgsModule.PublicArguments,
-        typeArgs: [],
-        functionArguments: simpleTransactionArguments,
-        secondarySignerAccounts: [],
-        feePayer: feePayerAccount,
+    describe("tests public_arguments, a function with all argument types except `&signer`", () => {
+      let baseBuilder: EntryFunctionTransactionBuilder;
+      // We use the base builders to check the fully qualified function call name- not fee payer/secondary signers
+      beforeAll(async () => {
+        baseBuilder = await TxArgsModule.PublicArguments.builder(
+          aptos.config,
+          senderAccount.accountAddress,
+          true,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          senderAccount.accountAddress.toString(),
+          "expected_string",
+          moduleObjects[0].toString(),
+          new Uint8Array([]),
+          [true, false, true],
+          new Uint8Array([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]),
+          [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
+          [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
+          [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT],
+          [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT],
+          [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT],
+          ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
+          ["expected_string", "abc", "def", "123", "456", "789"],
+          moduleObjects.map((obj) => obj.toString()),
+          [],
+          [true],
+          [1],
+          [2],
+          [3],
+          [4],
+          [5],
+          [6],
+          [senderAccount.accountAddress.toString()],
+          ["expected_string"],
+          [moduleObjects[0].toString()],
+        );
+      });
+
+      it("builds with no fee payer", async () => {
+        const builder = baseBuilder;
+        const response = await builder.submit({
+          primarySigner: senderAccount,
+        });
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
+      });
+
+      it("builds with a fee payer", async () => {
+        const builder = await TxArgsModule.PublicArguments.builder(
+          aptos.config,
+          senderAccount.accountAddress,
+          true,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          senderAccount.accountAddress.toString(),
+          "expected_string",
+          moduleObjects[0].toString(),
+          new Uint8Array([]),
+          [true, false, true],
+          new Uint8Array([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]),
+          [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
+          [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
+          [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT],
+          [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT],
+          [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT],
+          ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
+          ["expected_string", "abc", "def", "123", "456", "789"],
+          moduleObjects.map((obj) => obj.toString()),
+          [],
+          [true],
+          [1],
+          [2],
+          [3],
+          [4],
+          [5],
+          [6],
+          [senderAccount.accountAddress.toString()],
+          ["expected_string"],
+          [moduleObjects[0].toString()],
+          feePayerAccount.accountAddress,
+        );
+        const response = await builder.submit({
+          primarySigner: senderAccount,
+          feePayer: feePayerAccount,
+        });
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+            feePayer: feePayerAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
+      });
+      it("combines build/submit and successfully submits with a fee payer", async () => {
+        const response = await TxArgsModule.PublicArguments.submit(
+          aptos.config,
+          senderAccount,
+          true,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          senderAccount.accountAddress.toString(),
+          "expected_string",
+          moduleObjects[0].toString(),
+          new Uint8Array([]),
+          [true, false, true],
+          new Uint8Array([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]),
+          [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
+          [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
+          [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT],
+          [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT],
+          [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT],
+          ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
+          ["expected_string", "abc", "def", "123", "456", "789"],
+          moduleObjects.map((obj) => obj.toString()),
+          [],
+          [true],
+          [1],
+          [2],
+          [3],
+          [4],
+          [5],
+          [6],
+          [senderAccount.accountAddress.toString()],
+          ["expected_string"],
+          [moduleObjects[0].toString()],
+        );
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
+      });
+      it("combines build/submit and successfully submits", async () => {
+        const response = await TxArgsModule.PublicArguments.submit(
+          aptos.config,
+          senderAccount,
+          true,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          senderAccount.accountAddress.toString(),
+          "expected_string",
+          moduleObjects[0].toString(),
+          new Uint8Array([]),
+          [true, false, true],
+          new Uint8Array([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]),
+          [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
+          [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
+          [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT],
+          [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT],
+          [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT],
+          ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
+          ["expected_string", "abc", "def", "123", "456", "789"],
+          moduleObjects.map((obj) => obj.toString()),
+          [],
+          [true],
+          [1],
+          [2],
+          [3],
+          [4],
+          [5],
+          [6],
+          [senderAccount.accountAddress.toString()],
+          ["expected_string"],
+          [moduleObjects[0].toString()],
+          feePayerAccount,
+        );
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+            feePayer: feePayerAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
       });
     });
-    it("tests private_arguments, a function with all argument types except `&signer`", async () => {
-      await testAllBuilderPaths({
-        aptos,
-        senderAccount,
-        cls: TxArgsModule.PrivateArguments,
-        typeArgs: [],
-        functionArguments: simpleTransactionArguments,
-        secondarySignerAccounts: [],
-        feePayer: feePayerAccount,
-      });
-    });
-    it("tests public_arguments_multiple_signers, a multi-agent function with all argument types except `&signer`", async () => {
-      await testAllBuilderPaths({
-        aptos,
-        senderAccount,
-        cls: TxArgsModule.PublicArgumentsMultipleSigners,
-        typeArgs: [],
-        functionArguments: [
+    describe("tests public_arguments_multiple_signers, a multi-agent function with all argument types except `&signer`", () => {
+      let baseBuilder: EntryFunctionTransactionBuilder;
+
+      // We use the base builders to check the fully qualified function call name- not fee payer/secondary signers
+      beforeAll(async () => {
+        baseBuilder = await TxArgsModule.PublicArgumentsMultipleSigners.builder(
+          aptos.config,
+          senderAccount.accountAddress,
+          secondarySignerAccounts[0].accountAddress,
+          secondarySignerAccounts[1].accountAddress,
+          secondarySignerAccounts[2].accountAddress,
+          secondarySignerAccounts[3].accountAddress,
           [senderAccount.accountAddress, ...secondarySignerAccounts.map((s) => s.accountAddress)],
-          ...simpleTransactionArguments,
-        ],
-        secondarySignerAccounts,
-        feePayer: feePayerAccount,
+          true,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          senderAccount.accountAddress.toString(),
+          "expected_string",
+          moduleObjects[0].toString(),
+          new Uint8Array([]),
+          [true, false, true],
+          new Uint8Array([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]),
+          [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
+          [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
+          [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT],
+          [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT],
+          [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT],
+          ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
+          ["expected_string", "abc", "def", "123", "456", "789"],
+          moduleObjects.map((obj) => obj.toString()),
+          [],
+          [true],
+          [1],
+          [2],
+          [3],
+          [4],
+          [5],
+          [6],
+          [senderAccount.accountAddress.toString()],
+          ["expected_string"],
+          [moduleObjects[0].toString()],
+        );
       });
-    });
-    it("tests private_arguments_multiple_signers, a multi-agent function with all argument types except `&signer`", async () => {
-      await testAllBuilderPaths({
-        aptos,
-        senderAccount,
-        cls: TxArgsModule.PrivateArgumentsMultipleSigners,
-        typeArgs: [],
-        functionArguments: [
+
+      it("builds with no fee payer", async () => {
+        const builder = baseBuilder;
+        const response = await builder.submit({
+          primarySigner: senderAccount,
+          secondarySigners: secondarySignerAccounts,
+        });
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+            secondary: secondarySignerAccounts,
+          },
+          builder: baseBuilder,
+          response,
+        });
+      });
+      it("builds with a fee payer", async () => {
+        const builder = await TxArgsModule.PublicArgumentsMultipleSigners.builder(
+          aptos.config,
+          senderAccount.accountAddress,
+          secondarySignerAccounts[0].accountAddress,
+          secondarySignerAccounts[1].accountAddress,
+          secondarySignerAccounts[2].accountAddress,
+          secondarySignerAccounts[3].accountAddress,
           [senderAccount.accountAddress, ...secondarySignerAccounts.map((s) => s.accountAddress)],
-          ...simpleTransactionArguments,
-        ],
-        secondarySignerAccounts,
-        feePayer: feePayerAccount,
+          true,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          senderAccount.accountAddress.toString(),
+          "expected_string",
+          moduleObjects[0].toString(),
+          new Uint8Array([]),
+          [true, false, true],
+          new Uint8Array([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]),
+          [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
+          [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
+          [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT],
+          [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT],
+          [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT],
+          ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
+          ["expected_string", "abc", "def", "123", "456", "789"],
+          moduleObjects.map((obj) => obj.toString()),
+          [],
+          [true],
+          [1],
+          [2],
+          [3],
+          [4],
+          [5],
+          [6],
+          [senderAccount.accountAddress.toString()],
+          ["expected_string"],
+          [moduleObjects[0].toString()],
+          feePayerAccount.accountAddress,
+        );
+        const response = await builder.submit({
+          primarySigner: senderAccount,
+          secondarySigners: secondarySignerAccounts,
+          feePayer: feePayerAccount,
+        });
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+            secondary: secondarySignerAccounts,
+            feePayer: feePayerAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
+      });
+      it("combines build/submit and successfully submits", async () => {
+        const response = await TxArgsModule.PublicArgumentsMultipleSigners.submit(
+          aptos.config,
+          senderAccount,
+          secondarySignerAccounts[0],
+          secondarySignerAccounts[1],
+          secondarySignerAccounts[2],
+          secondarySignerAccounts[3],
+          [senderAccount.accountAddress, ...secondarySignerAccounts.map((s) => s.accountAddress)],
+          true,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          senderAccount.accountAddress.toString(),
+          "expected_string",
+          moduleObjects[0].toString(),
+          new Uint8Array([]),
+          [true, false, true],
+          new Uint8Array([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]),
+          [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
+          [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
+          [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT],
+          [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT],
+          [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT],
+          ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
+          ["expected_string", "abc", "def", "123", "456", "789"],
+          moduleObjects.map((obj) => obj.toString()),
+          [],
+          [true],
+          [1],
+          [2],
+          [3],
+          [4],
+          [5],
+          [6],
+          [senderAccount.accountAddress.toString()],
+          ["expected_string"],
+          [moduleObjects[0].toString()],
+        );
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+            secondary: secondarySignerAccounts,
+          },
+          builder: baseBuilder,
+          response,
+        });
+      });
+      it("combines build/submit and successfully submits with a fee payer", async () => {
+        const response = await TxArgsModule.PublicArgumentsMultipleSigners.submit(
+          aptos.config,
+          senderAccount,
+          secondarySignerAccounts[0],
+          secondarySignerAccounts[1],
+          secondarySignerAccounts[2],
+          secondarySignerAccounts[3],
+          [senderAccount.accountAddress, ...secondarySignerAccounts.map((s) => s.accountAddress)],
+          true,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          senderAccount.accountAddress.toString(),
+          "expected_string",
+          moduleObjects[0].toString(),
+          new Uint8Array([]),
+          [true, false, true],
+          new Uint8Array([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]),
+          [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
+          [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
+          [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT],
+          [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT],
+          [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT],
+          ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
+          ["expected_string", "abc", "def", "123", "456", "789"],
+          moduleObjects.map((obj) => obj.toString()),
+          [],
+          [true],
+          [1],
+          [2],
+          [3],
+          [4],
+          [5],
+          [6],
+          [senderAccount.accountAddress.toString()],
+          ["expected_string"],
+          [moduleObjects[0].toString()],
+          feePayerAccount,
+        );
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+            secondary: secondarySignerAccounts,
+            feePayer: feePayerAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
       });
     });
-    it("tests complex_arguments, a function with complex, nested argument types", async () => {
-      const optionArray = [EXPECTED_VECTOR_STRING];
+    describe("tests complex_arguments, a function with complex, nested argument types", () => {
+      let baseBuilder: EntryFunctionTransactionBuilder;
+      const optionArray = [EXPECTED_VECTOR_STRING] as Option<Array<string>>;
       const deeplyNested3 = [optionArray, optionArray, optionArray];
       const deeplyNested4 = [deeplyNested3, deeplyNested3, deeplyNested3];
-      const args = [
-        [EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8],
-        [EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING],
-        deeplyNested3,
-        deeplyNested4,
-      ];
-      await testAllBuilderPaths({
-        aptos,
-        senderAccount,
-        cls: TxArgsModule.ComplexArguments,
-        typeArgs: [],
-        functionArguments: args,
-        secondarySignerAccounts: [],
-        feePayer: feePayerAccount,
+
+      beforeAll(async () => {
+        baseBuilder = await TxArgsModule.ComplexArguments.builder(
+          aptos.config,
+          senderAccount.accountAddress,
+          [EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8],
+          [EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING],
+          deeplyNested3,
+          deeplyNested4,
+        );
+      });
+
+      it("builds with no fee payer", async () => {
+        const builder = baseBuilder;
+        const response = await builder.submit({
+          primarySigner: senderAccount,
+        });
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
+      });
+
+      it("builds with a fee payer", async () => {
+        const builder = await TxArgsModule.ComplexArguments.builder(
+          aptos.config,
+          senderAccount.accountAddress,
+          [EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8],
+          [EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING],
+          deeplyNested3,
+          deeplyNested4,
+          feePayerAccount.accountAddress,
+        );
+        const response = await builder.submit({
+          primarySigner: senderAccount,
+          feePayer: feePayerAccount,
+        });
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+            feePayer: feePayerAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
+      });
+
+      it("combines build/submit and successfully submits", async () => {
+        const response = await TxArgsModule.ComplexArguments.submit(
+          aptos.config,
+          senderAccount,
+          [EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8],
+          [EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING],
+          deeplyNested3,
+          deeplyNested4,
+        );
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
+      });
+
+      it("combines build/submit and successfully submits with a fee payer", async () => {
+        const response = await TxArgsModule.ComplexArguments.submit(
+          aptos.config,
+          senderAccount,
+          [EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8],
+          [EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING],
+          deeplyNested3,
+          deeplyNested4,
+          feePayerAccount,
+        );
+        checkResponse({
+          signers: {
+            primary: senderAccount,
+            feePayer: feePayerAccount,
+          },
+          builder: baseBuilder,
+          response,
+        });
       });
     });
 
     it("tests view_all_arguments, a view function that outputs all the arguments passed in", async () => {
-      const args = [
-        true,
-        1,
-        2,
-        3,
-        "4",
-        "5",
-        "6",
-        senderAccount.accountAddress.toString(),
-        "This is my favorite string :)",
-        moduleObjects[0].toString(),
-        new Uint8Array([1, 2, 3]),
-        [true, false, true],
-        new Uint8Array([0, 255, 1, 2]),
-        [1, 2, 3, 4],
-        [5, 6, 7, 8],
-        ["9", "10", "11", "12"],
-        ["13", "14", "15", "16"],
-        ["17", "18", "19", "20"],
-        [
-          AccountAddress.ZERO,
-          AccountAddress.ONE,
-          AccountAddress.TWO,
-          AccountAddress.THREE,
-          AccountAddress.FOUR,
-          senderAccount.accountAddress,
-        ].map((a) => a.toString()),
-        ["this", "is", "a", "string"],
-      ] as const;
       const viewAllArguments = await new TxArgsModule.ViewSomeArguments(
-        args[0],
-        args[1],
-        args[2],
-        args[3],
-        args[4],
-        args[5],
-        args[6],
-        args[7],
-        args[8],
-        args[9],
-        args[10],
-        Array.from(args[11]),
-        args[12],
-        Array.from(args[13]),
-        Array.from(args[14]),
-        Array.from(args[15]),
-        Array.from(args[16]),
-        Array.from(args[17]),
-        Array.from(args[18]),
-        Array.from(args[19]),
+        viewArgs[0],
+        viewArgs[1],
+        viewArgs[2],
+        viewArgs[3],
+        viewArgs[4],
+        viewArgs[5],
+        viewArgs[6],
+        viewArgs[7],
+        viewArgs[8],
+        viewArgs[9],
+        viewArgs[10],
+        Array.from(viewArgs[11]),
+        viewArgs[12],
+        Array.from(viewArgs[13]),
+        Array.from(viewArgs[14]),
+        Array.from(viewArgs[15]),
+        Array.from(viewArgs[16]),
+        Array.from(viewArgs[17]),
+        Array.from(viewArgs[18]),
+        Array.from(viewArgs[19]),
       ).submit({ aptos });
       viewAllArguments.forEach((arg, i) => {
         if (i == 9) {
           const arg = viewAllArguments[i]; // for explicit type checking
-          expect(normalizeObjectAddress(arg)).toEqual({ inner: args[i].toString() });
+          expect(normalizeObjectAddress(arg)).toEqual({ inner: viewArgs[i].toString() });
         } else if (i == 10 || i == 12) {
-          expect(arg).toEqual(Hex.fromHexInput(new Uint8Array(args[i].map((n) => n))).toString());
+          expect(arg).toEqual(Hex.fromHexInput(new Uint8Array(viewArgs[i].map((n: any) => n))).toString());
         } else if (i == 15 || i == 16 || i == 17) {
-          expect(arg).toEqual(args[i].map((n) => n.toString()));
+          expect(arg).toEqual(viewArgs[i].map((n: any) => n.toString()));
         } else {
-          expect(arg).toEqual(args[i]);
+          expect(arg).toEqual(viewArgs[i]);
         }
       });
     });
@@ -471,275 +1016,44 @@ describe("various transaction arguments", () => {
   });
 });
 
-export async function testAllBuilderPaths<T extends TransactionBuilder>(args: {
-  aptos: Aptos;
-  senderAccount: Account;
-  cls: T;
-  typeArgs: Array<TypeTag>;
-  functionArguments: Array<InputTypes>;
-  secondarySignerAccounts: Array<Account>;
-  feePayer: Account;
-}): Promise<boolean> {
-  const { aptos, senderAccount, cls, typeArgs, functionArguments, secondarySignerAccounts, feePayer } = args;
-  const secondarySigners = secondarySignerAccounts.length > 0 ? secondarySignerAccounts : undefined;
-  const secondarySignerAddresses = secondarySignerAccounts.map((account) => account.accountAddress);
-  const getBuilder = async (args: { withFeePayer: boolean }) => {
-    const { withFeePayer } = args;
-    let builder;
-    if (secondarySignerAddresses.length > 0) {
-      if (functionArguments.length > 0) {
-        if (withFeePayer) {
-          if (typeArgs.length > 0) {
-            builder = await cls.builderWithFeePayer(
-              aptos.config,
-              senderAccount.accountAddress,
-              ...secondarySignerAddresses,
-              ...functionArguments,
-              typeArgs,
-              feePayer.accountAddress,
-            );
-          } else {
-            builder = await cls.builderWithFeePayer(
-              aptos.config,
-              senderAccount.accountAddress,
-              ...secondarySignerAddresses,
-              ...functionArguments,
-              feePayer.accountAddress,
-            );
-          }
-        } else {
-          if (typeArgs.length > 0) {
-            builder = await cls.builder(
-              aptos.config,
-              senderAccount.accountAddress,
-              ...secondarySignerAddresses,
-              ...functionArguments,
-              typeArgs,
-            );
-          } else {
-            builder = await cls.builder(
-              aptos.config,
-              senderAccount.accountAddress,
-              ...secondarySignerAddresses,
-              ...functionArguments,
-            );
-          }
-        }
-      } else {
-        if (withFeePayer) {
-          if (typeArgs.length > 0) {
-            builder = await cls.builderWithFeePayer(
-              aptos.config,
-              senderAccount.accountAddress,
-              ...secondarySignerAddresses,
-              typeArgs,
-              feePayer.accountAddress,
-            );
-          } else {
-            builder = await cls.builderWithFeePayer(
-              aptos.config,
-              senderAccount.accountAddress,
-              ...secondarySignerAddresses,
-              feePayer.accountAddress,
-            );
-          }
-        } else {
-          if (typeArgs.length > 0) {
-            builder = await cls.builder(
-              aptos.config,
-              senderAccount.accountAddress,
-              ...secondarySignerAddresses,
-              typeArgs,
-            );
-          } else {
-            builder = await cls.builder(aptos.config, senderAccount.accountAddress, ...secondarySignerAddresses);
-          }
-        }
-      }
-    } else {
-      if (functionArguments.length > 0) {
-        if (withFeePayer) {
-          if (typeArgs.length > 0) {
-            builder = await cls.builderWithFeePayer(
-              aptos.config,
-              senderAccount.accountAddress,
-              ...functionArguments,
-              typeArgs,
-              feePayer.accountAddress,
-            );
-          } else {
-            builder = await cls.builderWithFeePayer(
-              aptos.config,
-              senderAccount.accountAddress,
-              ...functionArguments,
-              feePayer.accountAddress,
-            );
-          }
-        } else {
-          if (typeArgs.length > 0) {
-            builder = await cls.builder(aptos.config, senderAccount.accountAddress, ...functionArguments, typeArgs);
-          } else {
-            builder = await cls.builder(aptos.config, senderAccount.accountAddress, ...functionArguments);
-          }
-        }
-      } else {
-        if (withFeePayer) {
-          if (typeArgs.length > 0) {
-            builder = await cls.builderWithFeePayer(
-              aptos.config,
-              senderAccount.accountAddress,
-              typeArgs,
-              feePayer.accountAddress,
-            );
-          } else {
-            builder = await cls.builderWithFeePayer(
-              aptos.config,
-              senderAccount.accountAddress,
-              feePayer.accountAddress,
-            );
-          }
-        } else {
-          if (typeArgs.length > 0) {
-            builder = await cls.builder(aptos.config, senderAccount.accountAddress, typeArgs);
-          } else {
-            builder = await cls.builder(aptos.config, senderAccount.accountAddress);
-          }
-        }
-      }
-    }
-    return builder;
+export function checkResponse(args: {
+  signers: {
+    primary: Account;
+    secondary?: Array<Account>;
+    feePayer?: Account;
   };
+  builder: EntryFunctionTransactionBuilder;
+  response: UserTransactionResponse;
+}) {
+  const { builder, response } = args;
+  const { primary, secondary, feePayer } = args.signers;
+  const secondarySenders = secondary ?? [];
+  const withFeePayer = feePayer !== undefined;
 
-  const getSubmitter = async (args: { withFeePayer: boolean }) => {
-    const { withFeePayer } = args;
-    let submitter;
-    if (secondarySignerAddresses.length > 0) {
-      if (functionArguments.length > 0) {
-        if (withFeePayer) {
-          if (typeArgs.length > 0) {
-            submitter = await cls.submitWithFeePayer(
-              aptos.config,
-              senderAccount,
-              ...secondarySignerAccounts,
-              ...functionArguments,
-              typeArgs,
-              feePayer,
-            );
-          } else {
-            submitter = await cls.submitWithFeePayer(
-              aptos.config,
-              senderAccount,
-              ...secondarySignerAccounts,
-              ...functionArguments,
-              feePayer,
-            );
-          }
-        } else {
-          if (typeArgs.length > 0) {
-            submitter = await cls.submit(
-              aptos.config,
-              senderAccount,
-              ...secondarySignerAccounts,
-              ...functionArguments,
-              typeArgs,
-            );
-          } else {
-            submitter = await cls.submit(aptos.config, senderAccount, ...secondarySignerAccounts, ...functionArguments);
-          }
-        }
-      } else {
-        if (withFeePayer) {
-          if (typeArgs.length > 0) {
-            submitter = await cls.submitWithFeePayer(
-              aptos.config,
-              senderAccount,
-              ...secondarySignerAccounts,
-              typeArgs,
-              feePayer,
-            );
-          } else {
-            submitter = await cls.submitWithFeePayer(aptos.config, senderAccount, ...secondarySignerAccounts, feePayer);
-          }
-        } else {
-          if (typeArgs.length > 0) {
-            submitter = await cls.submit(aptos.config, senderAccount, ...secondarySignerAccounts, typeArgs);
-          } else {
-            submitter = await cls.submit(aptos.config, senderAccount, ...secondarySignerAccounts);
-          }
-        }
-      }
+  const multiAgent = secondarySenders.length > 0;
+
+  if (withFeePayer) {
+    expect(response.signature!.type).toEqual("fee_payer_signature");
+  } else {
+    if (!multiAgent) {
+      expect(response.signature!.type).toEqual("single_sender");
     } else {
-      if (functionArguments.length > 0) {
-        if (withFeePayer) {
-          if (typeArgs.length > 0) {
-            submitter = await cls.submitWithFeePayer(
-              aptos.config,
-              senderAccount,
-              ...functionArguments,
-              typeArgs,
-              feePayer,
-            );
-          } else {
-            submitter = await cls.submitWithFeePayer(aptos.config, senderAccount, ...functionArguments, feePayer);
-          }
-        } else {
-          if (typeArgs.length > 0) {
-            submitter = await cls.submit(aptos.config, senderAccount, ...functionArguments, typeArgs);
-          } else {
-            submitter = await cls.submit(aptos.config, senderAccount, ...functionArguments);
-          }
-        }
-      } else {
-        if (withFeePayer) {
-          if (typeArgs.length > 0) {
-            submitter = await cls.submitWithFeePayer(aptos.config, senderAccount, typeArgs, feePayer);
-          } else {
-            submitter = await cls.submitWithFeePayer(aptos.config, senderAccount, feePayer);
-          }
-        } else {
-          if (typeArgs.length > 0) {
-            submitter = await cls.submit(aptos.config, senderAccount, typeArgs);
-          } else {
-            submitter = await cls.submit(aptos.config, senderAccount);
-          }
-        }
-      }
+      expect(response.signature!.type).toEqual("multi_agent_signature");
     }
-    return submitter;
-  };
+  }
 
-  const builder = await getBuilder({ withFeePayer: false });
-  const response = await builder.submit({
-    primarySigner: senderAccount,
-    secondarySigners,
-  });
-  const builderWithFeePayer = await getBuilder({ withFeePayer: true });
-  const responseWithFeePayer = await builderWithFeePayer.submit({
-    primarySigner: senderAccount,
-    secondarySigners,
-    feePayer,
-  });
-  const submitResponse = await getSubmitter({ withFeePayer: false });
-  const submitResponseWithFeePayer = await getSubmitter({ withFeePayer: true });
+  expect(AccountAddress.fromRelaxed(response.sender).equals(primary.accountAddress)).toEqual(true);
+  const payload = response.payload as EntryFunctionPayloadResponse;
+  const split = payload.function.split("::");
+  // normalize
+  const moduleAddress = AccountAddress.fromRelaxed(split[0]);
+  const moduleName = split[1];
+  const functionName = split[2];
+  const fullyQualifiedFunctionCall = `${moduleAddress}::${moduleName}::${functionName}`;
 
-  expect(response.success).toBe(true);
-  expect(responseWithFeePayer.success).toBe(true);
-  expect(submitResponse.success).toBe(true);
-  expect(submitResponseWithFeePayer.success).toBe(true);
-
-  const multiAgent = secondarySignerAddresses.length > 0;
-
-  expect(response.signature!.type).toEqual(multiAgent ? "multi_agent_signature" : "single_sender");
-  expect(responseWithFeePayer.signature!.type).toEqual("fee_payer_signature");
-  expect(submitResponse.signature!.type).toEqual(multiAgent ? "multi_agent_signature" : "single_sender");
-  expect(submitResponseWithFeePayer.signature!.type).toEqual("fee_payer_signature");
-
-  const info = builder.responseInfo(response);
-  expect(info.function).toEqual(
+  expect(fullyQualifiedFunctionCall).toEqual(
     `${builder.payloadBuilder.moduleAddress}::${builder.payloadBuilder.moduleName}::${builder.payloadBuilder.functionName}`,
   );
 
-  return (
-    response.success && responseWithFeePayer.success && submitResponse.success && submitResponseWithFeePayer.success
-  );
+  expect(response.success).toEqual(true);
 }

@@ -44,19 +44,24 @@ async function main() {
 
 
 
-    const selections = await userInputs();
-    // const selections: Selections = {
-    //     configPath: "./tests/config.yaml",
-    //     additionalModules: [
-    //         // AccountAddress.fromRelaxed("0xabcde341afbc4d846a4453bf042dffe74a137c0f0b50c548a87f726f4b1d62ed"), // monsters
-    //         // AccountAddress.fromRelaxed("0x2cca48b8b0d7f77ef28bfd608883c599680c5b8db8192c5e3baaae1aee45114c"), // tx args module
-    //         AccountAddress.fromRelaxed("0x7e783b349d3e89cf5931af376ebeadbfab855b3fa239b7ada8f5a92fbea6b387"), // pyth
-    //         AccountAddress.fromRelaxed("0x7d7e436f0b2aafde60774efb26ccc432cf881b677aca7faaf2a01879bd19fb8"), // switchboard
-    //     ],
-    //     frameworkModules: [ AccountAddress.ONE, AccountAddress.THREE, AccountAddress.FOUR ], 
-    //     // frameworkModules: [],
-    //     network: Network.MAINNET,
-    // }
+    // const selections = await userInputs();
+    const selections: Selections = {
+        configPath: "./config.yaml",
+        namedModules: [
+
+        ],
+        additionalModules: [
+            // AccountAddress.ONE,
+            // AccountAddress.THREE,
+            // AccountAddress.FOUR,
+            // AccountAddress.fromRelaxed("0xabcde341afbc4d846a4453bf042dffe74a137c0f0b50c548a87f726f4b1d62ed"), // monsters
+            AccountAddress.fromRelaxed("0x2cca48b8b0d7f77ef28bfd608883c599680c5b8db8192c5e3baaae1aee45114c"), // tx args module
+            // AccountAddress.fromRelaxed("0x7e783b349d3e89cf5931af376ebeadbfab855b3fa239b7ada8f5a92fbea6b387"), // pyth
+            // AccountAddress.fromRelaxed("0x7d7e436f0b2aafde60774efb26ccc432cf881b677aca7faaf2a01879bd19fb8"), // switchboard
+        ],
+        // frameworkModules: [],
+        network: Network.LOCAL,
+    }
     const codeGeneratorConfig = getCodeGenConfig(selections.configPath);
     const codeGenerator = new CodeGenerator(codeGeneratorConfig);
     const aptosConfig = new AptosConfig({ network: selections.network });

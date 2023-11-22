@@ -325,40 +325,33 @@ export class CodeGenerator {
     lines.push("}");
 
     if (!viewFunction) {
-      const withAndWithoutFeePayer = [true, false];
-      withAndWithoutFeePayer.forEach((withFeePayer) => {
-        lines.push(
-          this.createPayloadBuilder(
-            signerArguments,
-            signerArgumentNames,
-            functionArguments,
-            fieldNames,
-            withFeePayer,
-            accountAddressInputString,
-            genericTypeTags,
-            noSignerArgEntryFunction,
-            explicitTypeTagInputs,
-            genericTypeTagsStringAnnotation,
-          ),
-        );
-      });
+      lines.push(
+        this.createPayloadBuilder(
+          signerArguments,
+          signerArgumentNames,
+          functionArguments,
+          fieldNames,
+          accountAddressInputString,
+          genericTypeTags,
+          noSignerArgEntryFunction,
+          explicitTypeTagInputs,
+          genericTypeTagsStringAnnotation,
+        ),
+      );
 
-      withAndWithoutFeePayer.forEach((withFeePayer) => {
-        lines.push(
-          this.createTransactionBuilder(
-            className,
-            signerArguments,
-            signerArgumentNames,
-            functionArguments,
-            fieldNames,
-            withFeePayer,
-            genericTypeTags,
-            noSignerArgEntryFunction,
-            explicitTypeTagInputs,
-            genericTypeTagsStringAnnotation,
-          ),
-        );
-      });
+      lines.push(
+        this.createTransactionBuilder(
+          className,
+          signerArguments,
+          signerArgumentNames,
+          functionArguments,
+          fieldNames,
+          genericTypeTags,
+          noSignerArgEntryFunction,
+          explicitTypeTagInputs,
+          genericTypeTagsStringAnnotation,
+        ),
+      );
     }
     lines.push("\n } \n");
     return lines.join("\n");
@@ -376,7 +369,6 @@ export class CodeGenerator {
     signerArgumentNames: Array<string>,
     functionArguments: Array<AnnotatedBCSArgument>,
     fieldNames: Array<string>,
-    withFeePayer: boolean,
     accountAddressInputString: string,
     genericTypeTags: Array<string>, // these parsed generic names if they're available, we just use them for counting
     noSignerArgEntryFunction: boolean,
@@ -417,18 +409,18 @@ export class CodeGenerator {
     const withSecondarySenders = signerArguments.length > 1;
     const conditionalCommaAndNewLine = constructorSenders.length > 0 ? ",\n" : "";
     const conditionalCommaAndNewLineOtherArgs = constructorOtherArgs.slice(0, -1).length > 0 ? ",\n" : "";
-    const conditionalCommaAndNewLineFeePayer = constructorOtherArgs.length > 0 ? ",\n" : "";
-
     const withTypeTags = genericTypeTags.length > 0;
 
     const returnType = EntryFunctionTransactionBuilder.name;
     const staticBuild =
-      `static async builder${withFeePayer ? "WithFeePayer" : ""}(\n` +
+      `static async builder(\n` +
       "aptosConfig: AptosConfig,\n" +
       (constructorSenders.join("\n") + "\n") +
-      (constructorOtherArgs.slice(0, -1).join("\n") + "\n") +
+      (constructorOtherArgs.slice(0, -1).join("\n") + (constructorOtherArgs.slice(0, -1).length > 0 ? "\n" : "")) +
       (withTypeTags ? `typeTags: ${explicitTypeTagInputs}, ${genericTypeTagAnnotation},\n` : "") +
-      (withFeePayer ? "feePayer:" + accountAddressInputString + ",\n" : "") +
+      "feePayer?: " +
+      accountAddressInputString +
+      ",\n" +
       `options?: InputGenerateTransactionOptions,\n` +
       `): Promise<${returnType}> {` +
       `const payloadBuilder = new this(` +
@@ -440,15 +432,17 @@ export class CodeGenerator {
         .join(",\n") +
       conditionalCommaAndNewLineOtherArgs +
       (withTypeTags ? `typeTags,\n` : "") +
-      (withFeePayer ? constructorOtherArgs.pop()?.split("?:")[0] + conditionalCommaAndNewLineFeePayer : "") +
+      "feePayer ? feePayer : undefined,\n" +
       `);
+      const optionalFeePayer = feePayer ? { feePayerAddress: feePayer } : {};
         const rawTransactionInput = (await buildTransaction({
           aptosConfig,
           sender: payloadBuilder.${PRIMARY_SENDER_FIELD_NAME},\n` +
-      (withFeePayer ? "feePayerAddress: feePayer ?? AccountAddress.ZERO,\n" : "") +
+      // "feePayerAddress: feePayer ?? AccountAddress.ZERO,\n" +
       (withSecondarySenders ? "secondarySignerAddresses: payloadBuilder.secondarySenders,\n" : "") +
       `payload: payloadBuilder.createPayload(),
           options,
+          ...optionalFeePayer,
         }));
         const aptos = new Aptos(aptosConfig);
         return new ${EntryFunctionTransactionBuilder.name}(
@@ -468,7 +462,6 @@ export class CodeGenerator {
     signerArgumentNames: Array<string>,
     functionArguments: Array<AnnotatedBCSArgument>,
     fieldNames: Array<string>,
-    withFeePayer: boolean,
     genericTypeTags: Array<string>, // these parsed generic names if they're available, we just use them for counting
     noSignerArgEntryFunction: boolean,
     explicitTypeTagInputs: string,
@@ -509,22 +502,21 @@ export class CodeGenerator {
 
     const conditionalCommaAndNewLine = constructorSenders.length > 0 ? ",\n" : "";
     const conditionalCommaAndNewLineOtherArgs = constructorOtherArgs.slice(0, -1).length > 0 ? ",\n" : "";
-    const conditionalCommaAndNewLineFeePayer = constructorOtherArgs.length > 0 ? ",\n" : "";
 
     const transactionBuilderFunctionSignature =
-      `static async submit${withFeePayer ? "WithFeePayer" : ""}(` +
+      `static async submit(` +
       "\n" +
       "aptosConfig: AptosConfig,\n" +
       (constructorSenders.join("\n") + "\n") +
-      (constructorOtherArgs.slice(0, -1).join("\n") + "\n") +
+      (constructorOtherArgs.slice(0, -1).join("\n") + (constructorOtherArgs.slice(0, -1).length > 0 ? "\n" : "")) +
       (withTypeTags ? `typeTags: ${explicitTypeTagInputs}, ${genericTypeTagAnnotation}\n` : "") +
-      (withFeePayer ? "feePayer: Account,\n" : "") +
+      "feePayer?: Account,\n" +
       "options?: InputGenerateTransactionOptions,\n" +
       "waitForTransactionOptions?: WaitForTransactionOptions,\n" +
       "): Promise<UserTransactionResponse> {\n";
 
     const transactionBuilderInstantiationString =
-      `const transactionBuilder = await ${className}.builder${withFeePayer ? "WithFeePayer" : ""}(\n` +
+      `const transactionBuilder = await ${className}.builder(\n` +
       "aptosConfig,\n" +
       constructorSenders.map((s) => `${s.split(":")[0]}.accountAddress`).join(",\n") +
       conditionalCommaAndNewLine +
@@ -534,7 +526,7 @@ export class CodeGenerator {
         .join(",\n") +
       conditionalCommaAndNewLineOtherArgs +
       (withTypeTags ? "typeTags,\n" : "") +
-      (withFeePayer ? "feePayer.accountAddress" + conditionalCommaAndNewLineFeePayer : "") +
+      "feePayer ? feePayer.accountAddress : undefined,\n" +
       "options,\n" +
       ");";
     const transactionBuilderHelperString =
@@ -549,7 +541,7 @@ export class CodeGenerator {
             .map((s) => s.split(":")[0])
             .join(", ")}]` + ",\n"
         : "") +
-      (withFeePayer ? "feePayer,\n" : "") +
+      "feePayer,\n" +
       "options: waitForTransactionOptions,\n" +
       "});\n" +
       "return response;\n" +

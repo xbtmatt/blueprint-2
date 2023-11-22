@@ -73,8 +73,6 @@ export function truncatedTypeTagString(args: {
     const genericMatch = typeTag.toString().match(/T(\d+)/);
     if (genericMatch) {
       const whichGeneric = Number(genericMatch[1]);
-      console.log(typeTag.toString());
-      console.log(`T${whichGeneric}`);
       const genericTypeTag = genericTypeTags[whichGeneric];
       if (!genericTypeTag) {
         throw new Error(`Missing a matching generic type tag for ${typeTag.toString()}`);

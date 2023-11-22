@@ -12,7 +12,7 @@ import {
   SimpleEntryFunctionArgumentTypes,
   AccountAddress,
 } from "@aptos-labs/ts-sdk";
-import publishJson from "./move/arguments/publish.json" assert { type: "json" };
+import publishJson from "./move/arguments/publish.json";
 import { ObjectAddressStruct } from "src/boilerplate/types";
 
 export async function publishPackage(

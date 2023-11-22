@@ -33,8 +33,6 @@ import { WalletSignTransactionFunction } from "src/types";
 export interface TransactionBuilder {
   builder: (...args: any[]) => Promise<EntryFunctionTransactionBuilder>;
   submit: (...args: any[]) => Promise<UserTransactionResponse>;
-  builderWithFeePayer: (...args: any[]) => Promise<EntryFunctionTransactionBuilder>;
-  submitWithFeePayer: (...args: any[]) => Promise<UserTransactionResponse>;
 }
 
 export class EntryFunctionTransactionBuilder {
@@ -66,7 +64,6 @@ export class EntryFunctionTransactionBuilder {
     }
     return signer(this.rawTransactionInput, asFeePayer);
   }
-
   // To be used by a static `submit` where the user enters named signer arguments
   async submit(args: {
     primarySigner: Account | WalletSignTransactionFunction | AccountAuthenticator;
