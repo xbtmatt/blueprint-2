@@ -52,7 +52,7 @@ import {
   getBoilerplateImports,
   BOILERPLATE_COPYRIGHT,
 } from "../index.js";
-import { lightBlue, lightCyan, lightGreen, lightMagenta, lightRed, red } from "kolorist";
+import { green, lightBlue, lightCyan, lightGray, lightGreen, lightMagenta, lightRed, red } from "kolorist";
 
 export class CodeGenerator {
   public readonly config: ConfigDictionary;
@@ -623,6 +623,7 @@ export class CodeGenerator {
     };
   }
 
+  // TODO: Add ability to ignore source code if it's incorrect..?
   async fetchABIs(aptos: Aptos, accountAddress: AccountAddress): Promise<ABIGeneratedCodeMap> {
     const moduleABIs = await fetchModuleABIs(aptos, accountAddress);
     const sourceCodeMap = await getSourceCodeMap(accountAddress, aptos.config.network);
@@ -677,7 +678,7 @@ export class CodeGenerator {
                       console.warn(
                         `${lightRed("Removing")} deprecated &mut in typetag ${lightMagenta(
                           param,
-                        )} in function ${lightMagenta(func.name)}`,
+                        )} in function ${lightGray(func.name)}`,
                       );
                       return param.replace("&mut ", "");
                     }
@@ -690,7 +691,7 @@ export class CodeGenerator {
                     })
                   ) {
                     console.warn(
-                      `${lightRed("Ignoring")} function ${lightMagenta(
+                      `${lightRed("Ignoring")} function ${lightGray(
                         func.name,
                       )} because it has a deprecated struct type tag`,
                     );
@@ -717,9 +718,11 @@ export class CodeGenerator {
                 } catch (e) {
                   if (func.params.find((param) => param.startsWith("&0x"))) {
                     console.warn(
-                      `${lightRed("Ignoring")} deprecated parameter ${lightMagenta(
+                      `${lightRed("Ignoring")} function ${lightGray(
+                        func.name,
+                      )} because it has a deprecated parameter ${lightMagenta(
                         func.params.find((param) => param.startsWith("&0x"))!,
-                      )} in function ${func.name}`,
+                      )}`,
                     );
                   } else {
                     console.error(e);
@@ -773,6 +776,15 @@ export class CodeGenerator {
         const namedAddresses = this.config.namedAddresses ?? {};
         const addressString = address.toString();
         const namedAddress = addressString in namedAddresses ? namedAddresses[addressString] : addressString;
+
+        const numTotalModules = Object.entries(generatedCode).length;
+        // print out how many modules we found
+        console.log(
+          `${lightGreen("[SUCCESS]:")} Generated code for ${lightBlue(numTotalModules)} modules for ${lightGray(
+            namedAddress,
+          )}`,
+        );
+
         this.writeGeneratedCodeToFiles(namedAddress, baseDirectory, generatedCode);
         const fileNamedAddress = namedAddress.startsWith("0x")
           ? truncateAddressForFileName(address)
