@@ -40,6 +40,8 @@ import {
   EntryFunctionTransactionBuilder,
   toViewFunctionReturnTypeString,
   createExplicitArraySizeString,
+  ViewFunctionPayloadBuilder,
+  EntryFunctionPayloadBuilder,
 } from "../index.js";
 import fs from "fs";
 import { ConfigDictionary } from "./config.js";
@@ -778,11 +780,20 @@ export class CodeGenerator {
         const namedAddress = addressString in namedAddresses ? namedAddresses[addressString] : addressString;
 
         const numTotalModules = Object.entries(generatedCode).length;
+        const entryClassName = EntryFunctionPayloadBuilder.name;
+        const viewClassName = ViewFunctionPayloadBuilder.name;
+        let numEntryFunctions = 0;
+        let numViewFunctions = 0;
+        Object.entries(generatedCode).forEach(([moduleName, moduleCode]) => {
+          numEntryFunctions += moduleCode.code.match(new RegExp(`extends ${entryClassName}`))?.length ?? 0;
+          numViewFunctions += moduleCode.code.match(new RegExp(`extends ${viewClassName}`))?.length ?? 0;
+        });
         // print out how many modules we found
         console.log(
-          `${lightGreen("[SUCCESS]:")} Generated code for ${lightBlue(numTotalModules)} modules for ${lightGray(
-            namedAddress,
-          )}`,
+          `${lightGreen("[SUCCESS]:")} Generated code for ` +
+            `${lightBlue(numEntryFunctions)} entry functions and ` +
+            `${lightBlue(numViewFunctions)} view functions`,
+          `over ${lightBlue(numTotalModules)} modules for ${lightGray(namedAddress)}`,
         );
 
         this.writeGeneratedCodeToFiles(namedAddress, baseDirectory, generatedCode);
