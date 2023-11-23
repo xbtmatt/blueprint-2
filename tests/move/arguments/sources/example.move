@@ -35,6 +35,12 @@ module transaction_arguments::example {
                 extend_ref: object::generate_extend_ref(&constructor_ref),
             }
         );
+        move_to(
+            deployer,
+            ContractData {
+                obj_addr: object::address_from_constructor_ref(&constructor_ref),
+            }
+        )
     }
 
     public entry fun move_values_to_object<V1: copy + drop + store, V2: copy + drop + store, V3: copy + drop + store>(

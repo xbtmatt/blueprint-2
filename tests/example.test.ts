@@ -55,7 +55,7 @@ import {
   TypeTagInput,
   fundAccounts,
 } from "../src";
-import { TxArgsModule } from "../generated/args_test_suite";
+import { Example, TxArgsModule } from "../generated/args_test_suite";
 import { gray, lightBlue, lightGreen, lightMagenta } from "kolorist";
 import { ObjectAddressStruct } from "src/boilerplate/types";
 
@@ -947,6 +947,36 @@ describe("various transaction arguments", () => {
           expect(arg).toEqual(viewArgs[i]);
         }
       });
+    });
+  });
+
+  describe("the example.move file with more meaningful examples", () => {
+    // We use the base builders to check the fully qualified function call name- not fee payer/secondary signers
+    it("tests the example.move code", async () => {
+      const [objAddress] = await new Example.GetObjAddress().submit({ aptos });
+      console.log(objAddress);
+
+      // this will only work one time after publish.
+      await Example.MoveValuesToObject.submit(
+        aptos.config,
+        senderAccount,
+        secondarySignerAccounts[0],
+        secondarySignerAccounts[1],
+        true,
+        123,
+        "this is a strrreeeing",
+        new U64(100),
+        new U128(1000),
+        MoveVector.U8([1, 2, 3]),
+        ["u64", "u128", "vector<u8>"],
+      );
+
+      // const response = await new Example.ViewObjectValues(
+      //   objAddress,
+      //   [`${PUBLISHER_ACCOUNT_ADDRESS}::example::SomeResource<u64, u128, vector<u8>>`, "u64", "u128", "vector<u8>"],
+      // ).submit({ aptos });
+
+      // console.log(response);
     });
   });
 

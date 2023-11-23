@@ -785,8 +785,8 @@ export class CodeGenerator {
         let numEntryFunctions = 0;
         let numViewFunctions = 0;
         Object.entries(generatedCode).forEach(([moduleName, moduleCode]) => {
-          numEntryFunctions += (moduleCode.code.match(new RegExp(`extends ${entryClassName}`, 'g')) || []).length;
-          numViewFunctions += (moduleCode.code.match(new RegExp(`extends ${viewClassName}`, 'g')) || []).length;
+          numEntryFunctions += (moduleCode.code.match(new RegExp(`extends ${entryClassName}`, "g")) || []).length;
+          numViewFunctions += (moduleCode.code.match(new RegExp(`extends ${viewClassName}`, "g")) || []).length;
         });
         // print out how many modules we found
         console.log(
