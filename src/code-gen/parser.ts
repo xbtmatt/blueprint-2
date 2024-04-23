@@ -42,6 +42,7 @@ import {
   createExplicitArraySizeString,
   ViewFunctionPayloadBuilder,
   EntryFunctionPayloadBuilder,
+  CONSTRUCTOR_ARGS_VARIABLE_NAME,
 } from "../index.js";
 import fs from "fs";
 import { ConfigDictionary } from "./config.js";
@@ -77,6 +78,7 @@ export class CodeGenerator {
       genericTypeParams,
       documentation,
       viewFunction,
+      structArgs,
     } = args;
     // These are the parsed type tags from the source code
     const genericTypeTagsString = args.genericTypeTags ?? "";
@@ -242,7 +244,11 @@ export class CodeGenerator {
     const constructorOtherArgs = new Array<string>();
     const noSignerArgEntryFunction = !viewFunction && signerArguments.length === 0;
 
-    lines.push(`${viewFunction ? "" : "private"} constructor(`);
+    if (structArgs) {
+      lines.push(`${viewFunction ? "" : "private"} constructor(${CONSTRUCTOR_ARGS_VARIABLE_NAME}: {`);
+    } else {
+      lines.push(`${viewFunction ? "" : "private"} constructor(`);
+    }
     signerArguments.forEach((signerArgument, i) => {
       // signers are `AccountAddress` in the constructor signature because we're just generating the raw transaction here.
       constructorSenders.push(
@@ -274,12 +280,26 @@ export class CodeGenerator {
     }
     lines.push(constructorSenders.join("\n"));
     lines.push(constructorOtherArgs.join("\n"));
-    lines.push(") {");
+
+    // End of the constructor arguments.
+    if (structArgs) {
+      lines.push("}) {");
+    } else {
+      lines.push(") {");
+    }
 
     // ------------------------------ Assign constructor fields to class fields ------------------------------ //
     lines.push("super();");
+    let destructuredArgs: string | undefined;
+    if (structArgs) {
+      const destructuredArgVariableNames = [...constructorSenders, ...constructorOtherArgs]
+        .map((c) => c.split(":")[0].trim().replace("?", ""))
+        .join(", ");
+      destructuredArgs = `const \{ ${destructuredArgVariableNames} \} = ${CONSTRUCTOR_ARGS_VARIABLE_NAME};`;
+      lines.push(destructuredArgs);
+    }
     const signerArgumentNamesAsClasses = signerArgumentNames.map(
-      (signerArgumentName) => `AccountAddress.fromRelaxed(${signerArgumentName})`,
+      (signerArgumentName) => `AccountAddress.from(${signerArgumentName})`,
     );
     const primarySenderAssignment = `this.${PRIMARY_SENDER_FIELD_NAME} = ${signerArgumentNamesAsClasses[0]};`;
     const secondarySenderAssignment = `this.${SECONDARY_SENDERS_FIELD_NAME} = [${signerArgumentNamesAsClasses
@@ -287,7 +307,7 @@ export class CodeGenerator {
       .join(", ")}];`;
 
     if (noSignerArgEntryFunction) {
-      lines.push(`this.${PRIMARY_SENDER_FIELD_NAME} = AccountAddress.fromRelaxed(${PRIMARY_SENDER_FIELD_NAME});`);
+      lines.push(`this.${PRIMARY_SENDER_FIELD_NAME} = AccountAddress.from(${PRIMARY_SENDER_FIELD_NAME});`);
     } else {
       lines.push(signerArguments.length >= 1 ? primarySenderAssignment : "");
       lines.push(signerArguments.length > 1 ? secondarySenderAssignment : "");
@@ -313,6 +333,7 @@ export class CodeGenerator {
         lines.push(`${fieldNames[i]}: ${entryFunctionInputTypeConverter},`);
       }
     });
+    // End of setting this.args = { ...args }.
     lines.push("}");
     if (genericTypeTagsString) {
       lines.push(
@@ -321,9 +342,10 @@ export class CodeGenerator {
     }
     if (!viewFunction) {
       lines.push(
-        `this.${FEE_PAYER_FIELD_NAME} = (${FEE_PAYER_FIELD_NAME} !== undefined) ? AccountAddress.fromRelaxed(${FEE_PAYER_FIELD_NAME}) : undefined;`,
+        `this.${FEE_PAYER_FIELD_NAME} = (${FEE_PAYER_FIELD_NAME} !== undefined) ? AccountAddress.from(${FEE_PAYER_FIELD_NAME}) : undefined;`,
       );
     }
+    // End of the constructor function.
     lines.push("}");
 
     if (!viewFunction) {
@@ -414,8 +436,7 @@ export class CodeGenerator {
     const withTypeTags = genericTypeTags.length > 0;
 
     const returnType = EntryFunctionTransactionBuilder.name;
-    const staticBuild =
-      `static async builder(\n` +
+    const builderFunctionArgs =
       "aptosConfig: AptosConfig,\n" +
       (constructorSenders.join("\n") + "\n") +
       (constructorOtherArgs.slice(0, -1).join("\n") + (constructorOtherArgs.slice(0, -1).length > 0 ? "\n" : "")) +
@@ -423,28 +444,45 @@ export class CodeGenerator {
       "feePayer?: " +
       accountAddressInputString +
       ",\n" +
-      `options?: InputGenerateTransactionOptions,\n` +
-      `): Promise<${returnType}> {` +
-      `const payloadBuilder = new this(` +
-      constructorSenders.map((s) => s.split(":")[0]).join(",\n") +
-      conditionalCommaAndNewLine +
-      constructorOtherArgs
-        .slice(0, -1)
-        .map((s) => s.split(":")[0])
-        .join(",\n") +
-      conditionalCommaAndNewLineOtherArgs +
-      (withTypeTags ? `typeTags,\n` : "") +
-      "feePayer ? feePayer : undefined,\n" +
-      `);
-      const optionalFeePayer = feePayer ? { feePayerAddress: feePayer } : {};
-        const rawTransactionInput = (await buildTransaction({
-          aptosConfig,
-          sender: payloadBuilder.${PRIMARY_SENDER_FIELD_NAME},\n` +
+      `options?: InputGenerateTransactionOptions,\n`;
+
+    let builderFunctionSignature: string;
+    let payloadBuilderConstructorArgs: string;
+    let destructuredArgs: string;
+    if (this.config.structArgs) {
+      builderFunctionSignature = `${CONSTRUCTOR_ARGS_VARIABLE_NAME}: { ${builderFunctionArgs} }`;
+      payloadBuilderConstructorArgs = `${CONSTRUCTOR_ARGS_VARIABLE_NAME}`;
+      destructuredArgs = `const { aptosConfig, options, feePayer } = ${CONSTRUCTOR_ARGS_VARIABLE_NAME};`;
+    } else {
+      builderFunctionSignature = builderFunctionArgs;
+
+      payloadBuilderConstructorArgs =
+        constructorSenders.map((s) => s.split(":")[0]).join(",\n") +
+        conditionalCommaAndNewLine +
+        constructorOtherArgs
+          .slice(0, -1)
+          .map((s) => s.split(":")[0])
+          .join(",\n") +
+        conditionalCommaAndNewLineOtherArgs +
+        (withTypeTags ? `typeTags,\n` : "") +
+        "feePayer ? feePayer : undefined,\n";
+      destructuredArgs = "";
+    }
+
+    const staticBuild =
+      `static async builder(\n` +
+      `${builderFunctionSignature}\n` +
+      `): Promise<${returnType}> {\n` +
+      `${destructuredArgs}\n` +
+      `const payloadBuilder = new this(${payloadBuilderConstructorArgs});\n` +
+      `const rawTransactionInput = (await buildTransaction({
+        aptosConfig,
+        sender: payloadBuilder.${PRIMARY_SENDER_FIELD_NAME},\n` +
       // "feePayerAddress: feePayer ?? AccountAddress.ZERO,\n" +
       (withSecondarySenders ? "secondarySignerAddresses: payloadBuilder.secondarySenders,\n" : "") +
       `payload: payloadBuilder.createPayload(),
           options,
-          ...optionalFeePayer,
+          feePayerAddress: feePayer,
         }));
         const aptos = new Aptos(aptosConfig);
         return new ${EntryFunctionTransactionBuilder.name}(
@@ -505,46 +543,71 @@ export class CodeGenerator {
     const conditionalCommaAndNewLine = constructorSenders.length > 0 ? ",\n" : "";
     const conditionalCommaAndNewLineOtherArgs = constructorOtherArgs.slice(0, -1).length > 0 ? ",\n" : "";
 
-    const transactionBuilderFunctionSignature =
-      `static async submit(` +
-      "\n" +
+    const submitFunctionArgs =
       "aptosConfig: AptosConfig,\n" +
       (constructorSenders.join("\n") + "\n") +
       (constructorOtherArgs.slice(0, -1).join("\n") + (constructorOtherArgs.slice(0, -1).length > 0 ? "\n" : "")) +
       (withTypeTags ? `typeTags: ${explicitTypeTagInputs}, ${genericTypeTagAnnotation}\n` : "") +
       "feePayer?: Account,\n" +
       "options?: InputGenerateTransactionOptions,\n" +
-      "waitForTransactionOptions?: WaitForTransactionOptions,\n" +
-      "): Promise<UserTransactionResponse> {\n";
+      "waitForTransactionOptions?: WaitForTransactionOptions,\n";
+
+    let submitFunctionSignature: string;
+    let submitConstructorArgs: string;
+    const primarySender = constructorSenders[0].split(":")[0];
+    let destructuredArgs: string;
+    if (this.config.structArgs) {
+      submitFunctionSignature = `${CONSTRUCTOR_ARGS_VARIABLE_NAME}: { ${submitFunctionArgs} }`;
+      submitConstructorArgs =
+        `\{` +
+        `...${CONSTRUCTOR_ARGS_VARIABLE_NAME},\n` +
+        `feePayer: feePayer ? feePayer.accountAddress : undefined,\n` +
+        `${primarySender}: primarySigner.accountAddress,\n` +
+        `\}\n`;
+      destructuredArgs = `const {
+        ${primarySender}: primarySigner,
+        waitForTransactionOptions,
+        feePayer
+      } = ${CONSTRUCTOR_ARGS_VARIABLE_NAME};\n`;
+    } else {
+      submitFunctionSignature = "\n" + submitFunctionArgs + "\n";
+      submitConstructorArgs =
+        "aptosConfig,\n" +
+        constructorSenders.map((s) => `${s.split(":")[0]}.accountAddress`).join(",\n") +
+        conditionalCommaAndNewLine +
+        constructorOtherArgs
+          .map((s) => s.split(":")[0])
+          .slice(0, -1)
+          .join(",\n") +
+        conditionalCommaAndNewLineOtherArgs +
+        (withTypeTags ? "typeTags,\n" : "") +
+        "feePayer ? feePayer.accountAddress : undefined,\n" +
+        "options,\n";
+      destructuredArgs = `const primarySigner = ${primarySender};\n`;
+    }
+
+    const transactionBuilderFunctionSignature =
+      `static async submit(\n` +
+      `${submitFunctionSignature}` +
+      `): Promise<UserTransactionResponse> {\n` +
+      destructuredArgs;
 
     const transactionBuilderInstantiationString =
-      `const transactionBuilder = await ${className}.builder(\n` +
-      "aptosConfig,\n" +
-      constructorSenders.map((s) => `${s.split(":")[0]}.accountAddress`).join(",\n") +
-      conditionalCommaAndNewLine +
-      constructorOtherArgs
-        .map((s) => s.split(":")[0])
-        .slice(0, -1)
-        .join(",\n") +
-      conditionalCommaAndNewLineOtherArgs +
-      (withTypeTags ? "typeTags,\n" : "") +
-      "feePayer ? feePayer.accountAddress : undefined,\n" +
-      "options,\n" +
-      ");";
+      `const transactionBuilder = await ${className}.builder(\n` + `${submitConstructorArgs}\n` + ");";
     const transactionBuilderHelperString =
       `` +
       `${transactionBuilderFunctionSignature}\n` +
       `${transactionBuilderInstantiationString}\n` +
       "const response = await transactionBuilder.submit({\n" +
-      `primarySigner: ${constructorSenders[0].split(":")[0]},\n` +
+      `primarySigner,\n` +
       (withSecondarySenders
-        ? `secondarySigners: [${constructorSenders
+        ? `${this.config.structArgs ? "secondarySigners: " : ""}[${constructorSenders
             .slice(1)
             .map((s) => s.split(":")[0])
             .join(", ")}]` + ",\n"
         : "") +
       "feePayer,\n" +
-      "options: waitForTransactionOptions,\n" +
+      `options: waitForTransactionOptions,\n` +
       "});\n" +
       "return response;\n" +
       "}\n";
@@ -626,9 +689,13 @@ export class CodeGenerator {
   }
 
   // TODO: Add ability to ignore source code if it's incorrect..?
-  async fetchABIs(aptos: Aptos, accountAddress: AccountAddress): Promise<ABIGeneratedCodeMap> {
+  async fetchABIs(aptos: Aptos, accountAddress: AccountAddress, sourceCodePath?: string): Promise<ABIGeneratedCodeMap> {
     const moduleABIs = await fetchModuleABIs(aptos, accountAddress);
-    const sourceCodeMap = await getSourceCodeMap(accountAddress, aptos.config.network);
+    if (moduleABIs.length === 0) {
+      console.warn(`No ABIs found for ${accountAddress.toString()}.`);
+      return {};
+    }
+    const sourceCodeMap = await getSourceCodeMap(accountAddress, aptos.config.network, sourceCodePath);
 
     let abiFunctions: AbiFunctions[] = [];
     let generatedCode: ABIGeneratedCodeMap = {};
@@ -648,7 +715,7 @@ export class CodeGenerator {
         const viewMapping = getArgNameMapping(abi, viewFunctions, sourceCode);
 
         const abiFunction = {
-          moduleAddress: AccountAddress.fromRelaxed(abi.address),
+          moduleAddress: AccountAddress.from(abi.address),
           moduleName: abi.name,
           publicEntryFunctions: getMoveFunctionsWithArgumentNames(abi, publicEntryFunctions, publicMapping),
           privateEntryFunctions: getMoveFunctionsWithArgumentNames(abi, privateEntryFunctions, privateMapping),
@@ -715,6 +782,7 @@ export class CodeGenerator {
                       fullStructNames: false,
                       displayFunctionSignature: true,
                     },
+                    structArgs: this.config.structArgs,
                   });
                   return generatedClassesCode;
                 } catch (e) {
@@ -766,15 +834,17 @@ export class CodeGenerator {
     return generatedCode;
   }
 
-  async generateCodeForModules(aptos: Aptos, moduleAddresses: Array<AccountAddress>): Promise<void> {
+  async generateCodeForModules(aptos: Aptos, moduleAddressesAndSourceCodePath: Array<AccountAddress>): Promise<void> {
     const baseDirectory = this.config.outputPath ?? ".";
     if (!fs.existsSync(baseDirectory)) {
       fs.mkdirSync(baseDirectory);
     }
     const generatedIndexFile: Array<string> = [BOILERPLATE_COPYRIGHT];
     await Promise.all(
-      moduleAddresses.map(async (address) => {
-        const generatedCode = await this.fetchABIs(aptos, address);
+      moduleAddressesAndSourceCodePath.map(async (address: AccountAddress) => {
+        const addressInSourcePath = this.config.sourceCodePath.hasOwnProperty(address.toString());
+        const sourceCodePath = addressInSourcePath ? this.config.sourceCodePath[address.toString()] : undefined;
+        const generatedCode = await this.fetchABIs(aptos, address, sourceCodePath);
         const namedAddresses = this.config.namedAddresses ?? {};
         const addressString = address.toString();
         const namedAddress = addressString in namedAddresses ? namedAddresses[addressString] : addressString;
@@ -818,6 +888,7 @@ export class CodeGenerator {
         }
       }),
     );
+    // Copy boilerplate files like the payload builder and types.ts
     copyCode(
       `./src/${FOR_GENERATION_DIRECTORY}/${PAYLOAD_BUILDERS_FILE_NAME}.ts`,
       baseDirectory + `${PAYLOAD_BUILDERS_FILE_NAME}.ts`,
@@ -856,9 +927,7 @@ export class CodeGenerator {
 
       perAddressIndexFile.push(`export * as ${toPascalCase(name)} from "./${name}.js";`);
       if (i === Object.keys(codeMap).length - 1) {
-        perAddressIndexFile.push(
-          `\nexport const ${MODULE_ADDRESS_FIELD_NAME} = AccountAddress.fromRelaxed("${address}");\n`,
-        );
+        perAddressIndexFile.push(`\nexport const ${MODULE_ADDRESS_FIELD_NAME} = AccountAddress.from("${address}");\n`);
         // create the index.ts file
         const indexFilePath = `${directory}/index.ts`;
         if (fs.existsSync(indexFilePath)) {

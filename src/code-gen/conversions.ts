@@ -114,7 +114,7 @@ export function transformEntryFunctionInputTypes(
       );
     }
     case TypeTagEnum.AccountAddress:
-      return `${toClassString(typeTagEnum)}.fromRelaxed(${nameFromDepth})${R_PARENTHESIS.repeat(depth)}`;
+      return `${toClassString(typeTagEnum)}.from(${nameFromDepth})${R_PARENTHESIS.repeat(depth)}`;
     case TypeTagEnum.Bool:
     case TypeTagEnum.U8:
     case TypeTagEnum.U16:
@@ -153,9 +153,7 @@ export function transformViewFunctionInputTypes(fieldName: string, typeTags: Arr
       );
     }
     case TypeTagEnum.AccountAddress:
-      return `${toClassString(toTypeTagEnum(typeTag))}.fromRelaxed(${nameFromDepth}).toString()${R_PARENTHESIS.repeat(
-        depth,
-      )}`;
+      return `${toClassString(toTypeTagEnum(typeTag))}.from(${nameFromDepth}).toString()${R_PARENTHESIS.repeat(depth)}`;
     case TypeTagEnum.Bool:
     case TypeTagEnum.U8:
     case TypeTagEnum.U16:

@@ -1,7 +1,15 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-import { Aptos, AptosConfig, AccountAddress, MoveFunction, MoveModule, Network } from "@aptos-labs/ts-sdk";
+import {
+  Aptos,
+  AptosConfig,
+  AccountAddress,
+  MoveFunction,
+  MoveModule,
+  Network,
+  stringStructTag,
+} from "@aptos-labs/ts-sdk";
 import {
   ArgumentNamesWithTypes,
   ModuleFunctionArgNameMap,
@@ -10,6 +18,8 @@ import {
   PackageMetadata,
   transformCode,
 } from "../index.js";
+import { existsSync, readFileSync, statSync } from "fs";
+import path from "path";
 
 // sort the abiFunctions by moduleName alphabetically
 export const sortByNameField = (objs: any[]): any[] => {
@@ -44,15 +54,35 @@ export async function getPackageMetadata(accountAddress: AccountAddress, network
 export async function getSourceCodeMap(
   accountAddress: AccountAddress,
   network: Network,
+  sourceCodePath?: string,
 ): Promise<Record<string, string>> {
   const packageMetadata = await getPackageMetadata(accountAddress, network);
 
   let sourceCodeByModuleName: Record<string, string> = {};
 
+  const sourcePathExists =
+    sourceCodePath != "" &&
+    typeof sourceCodePath !== "undefined" &&
+    existsSync(sourceCodePath) &&
+    statSync(sourceCodePath).isDirectory();
+
   packageMetadata.forEach((pkg) =>
     pkg.modules.forEach((module: ModuleMetadata) => {
-      const sourceCode = transformCode(module.source);
-      sourceCodeByModuleName[module.name] = sourceCode;
+      let filePath: string | undefined;
+      let code: string;
+      try {
+        if (sourcePathExists) {
+          filePath = path.join(sourceCodePath, `${module.name}.move`);
+          code = readFileSync(filePath, "ascii");
+        } else {
+          throw new Error("Source code path is invalid.");
+        }
+      } catch (e) {
+        console.warn(`Failed to read source code for module ${module.name} from ${filePath ?? sourceCodePath}.`);
+        console.warn("Attempting to parse source code from the package metadata instead.");
+        code = transformCode(module.source);
+      }
+      sourceCodeByModuleName[module.name] = code;
     }),
   );
 

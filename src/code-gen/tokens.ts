@@ -9,6 +9,9 @@ export const SECONDARY_SENDERS_FIELD_NAME = "secondarySenders";
 export const FEE_PAYER_FIELD_NAME = "feePayer";
 export const MODULE_ADDRESS_FIELD_NAME = "MODULE_ADDRESS";
 
+// private constructor(CONSTRUCTOR_ARGS_VARIABLE_NAME: { ... })
+export const CONSTRUCTOR_ARGS_VARIABLE_NAME = "builderArgs";
+
 export enum TransactionType {
   SingleSigner = "SingleSigner",
   MultiAgent = "MultiAgent",

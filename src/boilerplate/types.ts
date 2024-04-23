@@ -1,7 +1,7 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-import { AccountAddress, AccountAddressInput, TypeTag } from "@aptos-labs/ts-sdk";
+import { AccountAddress, AccountAddressInput, AccountAuthenticator, TypeTag } from "@aptos-labs/ts-sdk";
 
 export type Option<T> = [T] | [];
 
@@ -38,4 +38,12 @@ export type Uint256String = string;
 export type AccountAddressString = string;
 export type ObjectAddressStruct = {
   inner: string;
+};
+
+// This is supposed to match some function in the wallet adapter
+export type WalletSignTransactionFunction = (...args: any[]) => Promise<AccountAuthenticator>;
+
+export type AccountAuthenticatorWithData = {
+  accountAddress: AccountAddress;
+  accountAuthenticator: AccountAuthenticator;
 };

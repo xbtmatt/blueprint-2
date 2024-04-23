@@ -50,8 +50,14 @@ export function transformCode(source: string): string {
 }
 
 export async function fetchModuleABIs(aptos: Aptos, accountAddress: AccountAddress) {
+  try {
+    await aptos.getAccountInfo({ accountAddress });
+  } catch (e) {
+    console.warn(`Couldn't find account information for ${accountAddress} on network "${aptos.config.network}".`);
+    return [];
+  }
   const moduleABIs = await aptos.getAccountModules({
-    accountAddress: accountAddress.toString(),
+    accountAddress,
   });
   return moduleABIs;
 }
@@ -125,7 +131,7 @@ export async function fundAccounts(aptos: Aptos, accounts: Array<Account>) {
   const addressesRemaining = accounts.slice(1).map((account) => account.accountAddress);
   const amountToSend = Math.floor((FUND_AMOUNT * 2) / accounts.length);
   // Send coins from `account[0]` to `account[1..n]`
-  const transaction = await aptos.generateTransaction({
+  const transaction = await aptos.transaction.build.simple({
     sender: firstAccount.accountAddress.toString(),
     data: {
       function: "0x1::aptos_account::batch_transfer",
@@ -135,11 +141,11 @@ export async function fundAccounts(aptos: Aptos, accounts: Array<Account>) {
       ],
     },
   });
-  const signedTxn = await aptos.signTransaction({
+  const signedTxn = await aptos.transaction.sign({
     signer: firstAccount,
     transaction,
   });
-  const transactionResponse = await aptos.submitTransaction({
+  const transactionResponse = await aptos.transaction.submit.simple({
     transaction,
     senderAuthenticator: signedTxn,
   });

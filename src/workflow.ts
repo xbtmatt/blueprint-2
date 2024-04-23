@@ -1,8 +1,11 @@
 import { red } from "kolorist";
 import prompts, { PromptObject } from "prompts";
-import { Network, AccountAddress } from "@aptos-labs/ts-sdk";
+import { Network, AccountAddress, Hex, AccountAddressInput } from "@aptos-labs/ts-sdk";
 import fs from "fs";
 import { getCodeGenConfig } from "./code-gen/config.js";
+import { printer } from "prettier/doc.js";
+
+const DEFAULT_ADDRESSES_FOR_INPUT = "0x1, 0x3, 0x4, 0x5";
 
 export type Selections = {
   configPath: string;
@@ -28,15 +31,17 @@ export function validateAndSetConfigPath(configPath: string) {
 }
 
 export function validateAddresses(value: string) {
-  if (value === "") {
+  if (value === "" || value === DEFAULT_ADDRESSES_FOR_INPUT) {
     return true;
   }
-  const addresses = value.split(",");
+  const addresses = value.split(",").map((address) => address.trim());
   const valid = addresses.every((address) => {
     try {
-      AccountAddress.fromStringRelaxed(address);
+      AccountAddress.from(address) || Hex.fromHexString(address);
       return true;
     } catch (err) {
+      console.warn(`Error parsing address: ${address}`);
+      console.warn(`Please enter addresses in this format: ${DEFAULT_ADDRESSES_FOR_INPUT}`);
       return false;
     }
   });
@@ -57,7 +62,7 @@ export function validateNetwork(value: string) {
 export function generateChoices(configPath: string) {
   const namedAddresses = getCodeGenConfig(configPath).namedAddresses;
   const choices = Object.entries(namedAddresses).map(([address, name]) => {
-    const value = AccountAddress.fromRelaxed(address);
+    const value = AccountAddress.from(address);
     return {
       title: name as string,
       value: value,
@@ -66,6 +71,61 @@ export function generateChoices(configPath: string) {
   });
   return choices;
 }
+
+export const additionalNamesDict: Record<string, string> = {};
+
+export function updateAdditionalNameDict(k: string, v: AccountAddress) {
+  additionalNamesDict[k] = v.toString();
+}
+
+export type Selections2 = {
+  configPath: string;
+  namedModules: Array<AccountAddress>;
+  additionalModules: Array<AccountAddress>;
+  network: Network;
+};
+
+export async function nameModule(address: AccountAddressInput) {
+  let result: prompts.Answers<"names">;
+  try {
+    result = await prompts([
+      {
+        type: "text",
+        name: "names",
+        message: "Name for this module?",
+        hint: address.toString(),
+      },
+    ]);
+  } catch (err: any) {
+    // console.error(err.message);
+  }
+}
+
+export async function nameAdditionalAddresses(additionalModules: string) {
+  if (additionalModules.trim() === "") {
+    return null;
+  }
+
+  return additionalModules
+    .trim()
+    .split(",")
+    .map(async (address) => {
+      const accountAddress = AccountAddress.from(address.trim());
+      updateAdditionalNameDict(accountAddress.toString(), accountAddress);
+      await nameModule(accountAddress);
+      return {
+        title: accountAddress.toString(),
+        value: accountAddress,
+        description: additionalNamesDict[accountAddress.toString()],
+      };
+    });
+}
+
+export const f = () => {
+  Object.keys(additionalNamesDict).forEach((key) => {
+    console.log(key, additionalNamesDict[key]);
+  });
+};
 
 export async function userInputs() {
   let result: prompts.Answers<"configPath" | "namedModules" | "additionalModules" | "network">;
@@ -91,10 +151,10 @@ export async function userInputs() {
           type: "text",
           name: "additionalModules",
           message: "What additional modules would you like to generate code for?",
-          initial: "",
+          initial: DEFAULT_ADDRESSES_FOR_INPUT,
           separator: ",",
           hint: "- Comma separated list. Press enter to submit",
-          validate: (value: string) => validateAddresses(value),
+          validate: (value) => validateAddresses(value),
         },
         {
           type: "text",
@@ -108,6 +168,11 @@ export async function userInputs() {
         onCancel: () => {
           throw new Error(red("✖") + " Operation cancelled");
         },
+        onSubmit: (prompt, answer, answers) => {
+          // if (prompt.name === "idk") {
+          //   console.log("nameAdditionalAddresses");
+          // }
+        },
       },
     );
   } catch (err: any) {
@@ -116,10 +181,11 @@ export async function userInputs() {
   }
 
   const { configPath, namedModules, additionalModules, network } = result;
+
   return {
     configPath,
     namedModules,
-    additionalModules,
+    additionalModules: additionalModules == DEFAULT_ADDRESSES_FOR_INPUT ? [] : additionalModules,
     network,
   } as Selections;
 }

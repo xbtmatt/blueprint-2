@@ -166,12 +166,5 @@ export type codeGeneratorOptions = {
     displayFunctionSignature?: boolean;
     fullStructNames?: boolean;
   };
-};
-
-// This is supposed to match some function in the wallet adapter
-export type WalletSignTransactionFunction = (...args: any[]) => Promise<AccountAuthenticator>;
-
-export type AccountAuthenticatorWithData = {
-  accountAddress: AccountAddress;
-  accountAuthenticator: AccountAuthenticator;
+  structArgs: boolean;
 };

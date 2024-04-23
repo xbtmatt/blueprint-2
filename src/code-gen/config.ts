@@ -26,6 +26,7 @@ export type ConfigDictionary = {
   viewFunctionsNamespace: string;
   separateViewAndEntryFunctionsByNamespace: boolean;
   sdkPath: string;
+  sourceCodePath: Record<string, string>;
 };
 
 export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
@@ -45,6 +46,7 @@ export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
     viewFunctionsNamespace: "ViewFuncs",
     separateViewAndEntryFunctionsByNamespace: true,
     sdkPath: "@aptos-labs/ts-sdk",
+    sourceCodePath: {},
   };
   if (configFilePath !== undefined && configFilePath.length > 0) {
     if (!fs.existsSync(configFilePath)) {
@@ -55,15 +57,26 @@ export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
   }
   const config: ConfigDictionary = loadedConfig;
   const namedAddresses = config.namedAddresses;
+  const sourceCodePath = config.sourceCodePath;
   if (namedAddresses !== undefined) {
     Object.keys(namedAddresses).forEach((key) => {
       const address = namedAddresses[key];
       delete namedAddresses[key];
       // normalize the address key
-      const normalizedKey = AccountAddress.fromRelaxed(key).toString();
+      const normalizedKey = AccountAddress.from(key).toString();
       namedAddresses[normalizedKey] = address;
     });
   }
+  if (sourceCodePath !== undefined) {
+    Object.keys(sourceCodePath).forEach((key) => {
+      const address = sourceCodePath[key];
+      delete sourceCodePath[key];
+      // normalize the address key
+      const normalizedKey = AccountAddress.from(key).toString();
+      sourceCodePath[normalizedKey] = address;
+    });
+  }
   config.namedAddresses = namedAddresses;
+  config.sourceCodePath = sourceCodePath;
   return config;
 }

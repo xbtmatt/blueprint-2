@@ -33,6 +33,9 @@ import {
   Uint64,
   Uint128,
   Uint256,
+  isMultiAgentSignature,
+  isFeePayerSignature,
+  isUserTransactionResponse,
 } from "@aptos-labs/ts-sdk";
 import {
   rawTransactionHelper,
@@ -40,18 +43,22 @@ import {
   publishArgumentTestModule,
   PUBLISHER_ACCOUNT_PK,
   PUBLISHER_ACCOUNT_ADDRESS,
+  getAptosClient,
+  MULTI_SIGNER_SCRIPT_ARGUMENT_TEST,
 } from "./helper";
 import { fundAccounts } from "../src";
 
-// Upper bound values for uint8, uint16, uint64 and uint128
-export const MAX_U8_NUMBER: Uint8 = 2 ** 8 - 1;
-export const MAX_U16_NUMBER: Uint16 = 2 ** 16 - 1;
-export const MAX_U32_NUMBER: Uint32 = 2 ** 32 - 1;
-export const MAX_U64_BIG_INT: Uint64 = BigInt(2) ** BigInt(64) - BigInt(1);
-export const MAX_U128_BIG_INT: Uint128 = BigInt(2) ** BigInt(128) - BigInt(1);
-export const MAX_U256_BIG_INT: Uint256 = BigInt(2) ** BigInt(256) - BigInt(1);
+// Upper bound values for uint8, uint16, uint64 etc.  These are all derived as
+// 2^N - 1, where N is the number of bits in the type.
+export const MAX_U8_NUMBER: Uint8 = 255;
+export const MAX_U16_NUMBER: Uint16 = 65535;
+export const MAX_U32_NUMBER: Uint32 = 4294967295;
+export const MAX_U64_BIG_INT: Uint64 = 18446744073709551615n;
+export const MAX_U128_BIG_INT: Uint128 = 340282366920938463463374607431768211455n;
+export const MAX_U256_BIG_INT: Uint256 =
+  115792089237316195423570985008687907853269984665640564039457584007913129639935n;
 
-jest.setTimeout(15000);
+jest.setTimeout(10000);
 
 // This test uses lots of helper functions, explained here:
 //  the `transactionArguments` array contains every possible argument type
@@ -61,8 +68,7 @@ jest.setTimeout(15000);
 // `sender_address: address` or all of the `&signer` addresses: `signer_addresses: vector<address>`
 
 describe("various transaction arguments", () => {
-  const config = new AptosConfig({ network: Network.LOCAL });
-  const aptos = new Aptos(config);
+  const { aptos } = getAptosClient();
   const senderAccount = Account.fromPrivateKey({
     privateKey: new Ed25519PrivateKey(PUBLISHER_ACCOUNT_PK),
     legacy: false,
@@ -73,148 +79,144 @@ describe("various transaction arguments", () => {
   let transactionArguments: Array<EntryFunctionArgumentTypes>;
   let simpleTransactionArguments: Array<SimpleEntryFunctionArgumentTypes>;
   let mixedTransactionArguments: Array<EntryFunctionArgumentTypes | SimpleEntryFunctionArgumentTypes>;
-  const EXPECTED_VECTOR_U8 = new Uint8Array([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]);
-  const EXPECTED_VECTOR_STRING = ["expected_string", "abc", "def", "123", "456", "789"];
+  const EXPECTED_VECTOR_U8 = MoveVector.U8([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]);
+  const EXPECTED_VECTOR_STRING = MoveVector.MoveString(["expected_string", "abc", "def", "123", "456", "789"]);
 
   beforeAll(async () => {
-    try {
-      await fundAccounts(aptos, [senderAccount, ...secondarySignerAccounts, feePayerAccount]);
-      await publishArgumentTestModule(aptos, senderAccount);
+    await fundAccounts(aptos, [senderAccount, ...secondarySignerAccounts, feePayerAccount]);
+    await publishArgumentTestModule(aptos, senderAccount);
 
-      // when deploying, `init_module` creates 3 objects and stores them into the `SetupData` resource
-      // within that resource is 3 fields: `empty_object_1`, `empty_object_2`, `empty_object_3`
-      // we need to extract those objects and use them as arguments for the entry functions
-      type SetupData = {
-        empty_object_1: { inner: string };
-        empty_object_2: { inner: string };
-        empty_object_3: { inner: string };
-      };
+    // when deploying, `init_module` creates 3 objects and stores them into the `SetupData` resource
+    // within that resource is 3 fields: `empty_object_1`, `empty_object_2`, `empty_object_3`
+    // we need to extract those objects and use them as arguments for the entry functions
+    type SetupData = {
+      empty_object_1: { inner: string };
+      empty_object_2: { inner: string };
+      empty_object_3: { inner: string };
+    };
 
-      const setupData = await aptos.getAccountResource<SetupData>({
-        accountAddress: senderAccount.accountAddress.toString(),
-        resourceType: `${senderAccount.accountAddress.toString()}::tx_args_module::SetupData`,
-      });
+    const setupData = await aptos.getAccountResource<SetupData>({
+      accountAddress: senderAccount.accountAddress,
+      resourceType: `${senderAccount.accountAddress}::tx_args_module::SetupData`,
+    });
 
-      moduleObjects.push(AccountAddress.fromStringRelaxed(setupData.empty_object_1.inner));
-      moduleObjects.push(AccountAddress.fromStringRelaxed(setupData.empty_object_2.inner));
-      moduleObjects.push(AccountAddress.fromStringRelaxed(setupData.empty_object_3.inner));
+    moduleObjects.push(AccountAddress.fromString(setupData.empty_object_1.inner));
+    moduleObjects.push(AccountAddress.fromString(setupData.empty_object_2.inner));
+    moduleObjects.push(AccountAddress.fromString(setupData.empty_object_3.inner));
 
-      transactionArguments = [
-        new Bool(true),
-        new U8(1),
-        new U16(2),
-        new U32(3),
-        new U64(4),
-        new U128(5),
-        new U256(6),
-        senderAccount.accountAddress,
-        new MoveString("expected_string"),
-        moduleObjects[0],
-        new MoveVector([]),
-        MoveVector.Bool([true, false, true]),
-        MoveVector.U8(EXPECTED_VECTOR_U8),
-        MoveVector.U16([0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER]),
-        MoveVector.U32([0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER]),
-        MoveVector.U64([0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT]),
-        MoveVector.U128([0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT]),
-        MoveVector.U256([0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT]),
-        new MoveVector([
-          AccountAddress.fromStringRelaxed("0x0"),
-          AccountAddress.fromStringRelaxed("0xabc"),
-          AccountAddress.fromStringRelaxed("0xdef"),
-          AccountAddress.fromStringRelaxed("0x123"),
-          AccountAddress.fromStringRelaxed("0x456"),
-          AccountAddress.fromStringRelaxed("0x789"),
-        ]),
-        MoveVector.MoveString(EXPECTED_VECTOR_STRING),
-        new MoveVector(moduleObjects),
-        new MoveOption(),
-        new MoveOption(new Bool(true)),
-        new MoveOption(new U8(1)),
-        new MoveOption(new U16(2)),
-        new MoveOption(new U32(3)),
-        new MoveOption(new U64(4)),
-        new MoveOption(new U128(5)),
-        new MoveOption(new U256(6)),
-        new MoveOption(senderAccount.accountAddress),
-        new MoveOption(new MoveString("expected_string")),
-        new MoveOption(moduleObjects[0]),
-      ];
+    transactionArguments = [
+      new Bool(true),
+      new U8(1),
+      new U16(2),
+      new U32(3),
+      new U64(4),
+      new U128(5),
+      new U256(6),
+      senderAccount.accountAddress,
+      new MoveString("expected_string"),
+      moduleObjects[0],
+      new MoveVector([]),
+      MoveVector.Bool([true, false, true]),
+      EXPECTED_VECTOR_U8,
+      MoveVector.U16([0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER]),
+      MoveVector.U32([0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER]),
+      MoveVector.U64([0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT]),
+      MoveVector.U128([0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT]),
+      MoveVector.U256([0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT]),
+      new MoveVector([
+        AccountAddress.fromString("0x0"),
+        AccountAddress.fromString("0xabc"),
+        AccountAddress.fromString("0xdef"),
+        AccountAddress.fromString("0x123"),
+        AccountAddress.fromString("0x456"),
+        AccountAddress.fromString("0x789"),
+      ]),
+      EXPECTED_VECTOR_STRING,
+      new MoveVector(moduleObjects),
+      new MoveOption(),
+      new MoveOption(new Bool(true)),
+      new MoveOption(new U8(1)),
+      new MoveOption(new U16(2)),
+      new MoveOption(new U32(3)),
+      new MoveOption(new U64(4)),
+      new MoveOption(new U128(5)),
+      new MoveOption(new U256(6)),
+      new MoveOption(senderAccount.accountAddress),
+      new MoveOption(new MoveString("expected_string")),
+      new MoveOption(moduleObjects[0]),
+    ];
 
-      simpleTransactionArguments = [
-        true,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        senderAccount.accountAddress.toString(),
-        "expected_string",
-        moduleObjects[0].toString(),
-        [],
-        [true, false, true],
-        [0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER],
-        [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
-        [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
-        [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT.toString(10)],
-        [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT.toString(10)],
-        [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT.toString(10)],
-        ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
-        ["expected_string", "abc", "def", "123", "456", "789"],
-        moduleObjects.map((obj) => obj.toString()),
-        undefined,
-        true,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        senderAccount.accountAddress.toString(),
-        "expected_string",
-        moduleObjects[0].toString(),
-      ];
+    simpleTransactionArguments = [
+      true,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      senderAccount.accountAddress.toString(),
+      "expected_string",
+      moduleObjects[0].toString(),
+      [],
+      [true, false, true],
+      [0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER],
+      [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
+      [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
+      [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT.toString(10)],
+      [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT.toString(10)],
+      [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT.toString(10)],
+      ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
+      ["expected_string", "abc", "def", "123", "456", "789"],
+      moduleObjects.map((obj) => obj.toString()),
+      undefined,
+      true,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      senderAccount.accountAddress.toString(),
+      "expected_string",
+      moduleObjects[0].toString(),
+    ];
 
-      // Mixes different types of number arguments, and parsed an unparsed arguments
-      mixedTransactionArguments = [
-        true,
-        1,
-        2,
-        3,
-        4n,
-        BigInt(5),
-        "6",
-        senderAccount.accountAddress,
-        "expected_string",
-        moduleObjects[0],
-        [],
-        [true, false, true],
-        [0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER],
-        [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
-        [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
-        [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT.toString(10)],
-        [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT.toString(10)],
-        [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT.toString(10)],
-        ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
-        ["expected_string", "abc", "def", "123", "456", "789"],
-        moduleObjects.map((obj) => obj.toString()),
-        null,
-        new MoveOption(new Bool(true)),
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        senderAccount.accountAddress.toString(),
-        "expected_string",
-        moduleObjects[0].toString(),
-      ];
-    } catch (e) {
-      console.error(e);
-    }
-  }, 30000);
+    // Mixes different types of number arguments, and parsed an unparsed arguments
+    mixedTransactionArguments = [
+      true,
+      1,
+      2,
+      3,
+      4n,
+      BigInt(5),
+      "6",
+      senderAccount.accountAddress,
+      "expected_string",
+      moduleObjects[0],
+      [],
+      [true, false, true],
+      [0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER],
+      [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
+      [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
+      [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT.toString(10)],
+      [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT.toString(10)],
+      [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT.toString(10)],
+      ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
+      ["expected_string", "abc", "def", "123", "456", "789"],
+      moduleObjects.map((obj) => obj.toString()),
+      null,
+      new MoveOption(new Bool(true)),
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      senderAccount.accountAddress.toString(),
+      "expected_string",
+      moduleObjects[0].toString(),
+    ];
+  });
 
   describe("type tags", () => {
     it("successfully submits a transaction with 31 complex type tags", async () => {
@@ -365,14 +367,18 @@ describe("various transaction arguments", () => {
         secondarySignerAccounts,
       );
       expect(response.success).toBe(true);
-      const responseSignature = response.signature as TransactionMultiAgentSignature;
+
+      const responseSignature = response.signature;
+      if (responseSignature === undefined || !isMultiAgentSignature(responseSignature)) {
+        throw new Error("Expected multi agent signature");
+      }
+
       const secondarySignerAddressesParsed = responseSignature.secondary_signer_addresses.map((address) =>
-        AccountAddress.fromStringRelaxed(address),
+        AccountAddress.fromString(address),
       );
       expect(secondarySignerAddressesParsed.map((s) => s.toString())).toEqual(
         secondarySignerAddresses.map((address) => address.toString()),
       );
-      expect((responseSignature as any).fee_payer_address).toBeUndefined();
     });
 
     it("simple inputs successfully submits a multi signer transaction with all argument types", async () => {
@@ -389,14 +395,16 @@ describe("various transaction arguments", () => {
         secondarySignerAccounts,
       );
       expect(response.success).toBe(true);
-      const responseSignature = response.signature as TransactionMultiAgentSignature;
+      if (response.signature === undefined || !isMultiAgentSignature(response.signature)) {
+        throw new Error("Expected multi agent signature");
+      }
+      const responseSignature = response.signature;
       const secondarySignerAddressesParsed = responseSignature.secondary_signer_addresses.map((address) =>
-        AccountAddress.fromStringRelaxed(address),
+        AccountAddress.fromString(address),
       );
       expect(secondarySignerAddressesParsed.map((s) => s.toString())).toEqual(
         secondarySignerAddresses.map((address) => address.toString()),
       );
-      expect((responseSignature as any).fee_payer_address).toBeUndefined();
     });
   });
 
@@ -412,9 +420,12 @@ describe("various transaction arguments", () => {
         feePayerAccount,
       );
       expect(response.success).toBe(true);
-      const responseSignature = response.signature as TransactionFeePayerSignature;
+      if (response.signature === undefined || !isFeePayerSignature(response.signature)) {
+        throw new Error("Expected fee payer signature");
+      }
+      const responseSignature = response.signature;
       expect(responseSignature.secondary_signer_addresses.length).toEqual(0);
-      expect(AccountAddress.fromStringRelaxed(responseSignature.fee_payer_address).toString()).toEqual(
+      expect(AccountAddress.fromString(responseSignature.fee_payer_address).toString()).toEqual(
         feePayerAccount.accountAddress.toString(),
       );
     });
@@ -434,14 +445,17 @@ describe("various transaction arguments", () => {
         feePayerAccount,
       );
       expect(response.success).toBe(true);
-      const responseSignature = response.signature as TransactionFeePayerSignature;
+      if (response.signature === undefined || !isFeePayerSignature(response.signature)) {
+        throw new Error("Expected fee payer signature");
+      }
+      const responseSignature = response.signature;
       const secondarySignerAddressesParsed = responseSignature.secondary_signer_addresses.map((address) =>
-        AccountAddress.fromStringRelaxed(address),
+        AccountAddress.fromString(address),
       );
       expect(secondarySignerAddressesParsed.map((s) => s.toString())).toEqual(
         secondarySignerAddresses.map((address) => address.toString()),
       );
-      expect(AccountAddress.fromStringRelaxed(responseSignature.fee_payer_address).toString()).toEqual(
+      expect(AccountAddress.fromString(responseSignature.fee_payer_address).toString()).toEqual(
         feePayerAccount.accountAddress.toString(),
       );
     });
@@ -457,9 +471,12 @@ describe("various transaction arguments", () => {
         feePayerAccount,
       );
       expect(response.success).toBe(true);
-      const responseSignature = response.signature as TransactionFeePayerSignature;
+      if (response.signature === undefined || !isFeePayerSignature(response.signature)) {
+        throw new Error("Expected fee payer signature");
+      }
+      const responseSignature = response.signature;
       expect(responseSignature.secondary_signer_addresses.length).toEqual(0);
-      expect(AccountAddress.fromStringRelaxed(responseSignature.fee_payer_address).toString()).toEqual(
+      expect(AccountAddress.fromString(responseSignature.fee_payer_address).toString()).toEqual(
         feePayerAccount.accountAddress.toString(),
       );
     });
@@ -479,22 +496,78 @@ describe("various transaction arguments", () => {
         feePayerAccount,
       );
       expect(response.success).toBe(true);
-      const responseSignature = response.signature as TransactionFeePayerSignature;
+      if (response.signature === undefined || !isFeePayerSignature(response.signature)) {
+        throw new Error("Expected fee payer signature");
+      }
+      const responseSignature = response.signature;
       const secondarySignerAddressesParsed = responseSignature.secondary_signer_addresses.map((address) =>
-        AccountAddress.fromStringRelaxed(address),
+        AccountAddress.fromString(address),
       );
       expect(secondarySignerAddressesParsed.map((s) => s.toString())).toEqual(
         secondarySignerAddresses.map((address) => address.toString()),
       );
-      expect(AccountAddress.fromStringRelaxed(responseSignature.fee_payer_address).toString()).toEqual(
+      expect(AccountAddress.fromString(responseSignature.fee_payer_address).toString()).toEqual(
         feePayerAccount.accountAddress.toString(),
       );
     });
   });
 
+  describe("script transactions", () => {
+    it("successfully submits a script transaction with all argument types", async () => {
+      const rawTransaction = await aptos.transaction.build.multiAgent({
+        sender: senderAccount.accountAddress,
+        data: {
+          bytecode: MULTI_SIGNER_SCRIPT_ARGUMENT_TEST,
+          functionArguments: [
+            senderAccount.accountAddress,
+            ...secondarySignerAccounts.map((account) => account.accountAddress),
+            new Bool(true),
+            new U8(1),
+            new U16(2),
+            new U32(3),
+            new U64(4),
+            new U128(5),
+            new U256(6),
+            senderAccount.accountAddress,
+            new MoveString("expected_string"),
+            moduleObjects[0],
+            MoveVector.U8([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER]),
+          ],
+        },
+        secondarySignerAddresses: secondarySignerAccounts.map((account) => account.accountAddress),
+      });
+      const senderAuthenticator = await aptos.transaction.sign({ signer: senderAccount, transaction: rawTransaction });
+      const secondaryAuthenticators = secondarySignerAccounts.map((account) =>
+        aptos.transaction.sign({
+          signer: account,
+          transaction: rawTransaction,
+        }),
+      );
+      const transactionResponse = await aptos.transaction.submit.multiAgent({
+        transaction: rawTransaction,
+        senderAuthenticator,
+        additionalSignersAuthenticators: secondaryAuthenticators,
+      });
+      const response = await aptos.waitForTransaction({
+        transactionHash: transactionResponse.hash,
+      });
+      expect(response.success).toBe(true);
+
+      if (!isUserTransactionResponse(response)) {
+        throw new Error("Expected user transaction response");
+      }
+
+      if (response.signature === undefined || !isMultiAgentSignature(response.signature)) {
+        throw new Error("Expected multi agent signature");
+      }
+      expect(response.signature.type).toBe("multi_agent_signature");
+      expect(response.payload.type).toBe("script_payload");
+    });
+  });
+
   describe("nested, complex arguments", () => {
     it("successfully submits a function with very complex arguments", async () => {
-      const optionVector = new MoveOption(MoveVector.MoveString(EXPECTED_VECTOR_STRING));
+      const optionVector = new MoveOption(EXPECTED_VECTOR_STRING);
       const deeplyNested3 = new MoveVector([optionVector, optionVector, optionVector]);
       const deeplyNested4 = new MoveVector([deeplyNested3, deeplyNested3, deeplyNested3]);
 
@@ -504,16 +577,8 @@ describe("various transaction arguments", () => {
         "complex_arguments",
         [],
         [
-          new MoveVector([
-            MoveVector.U8(EXPECTED_VECTOR_U8),
-            MoveVector.U8(EXPECTED_VECTOR_U8),
-            MoveVector.U8(EXPECTED_VECTOR_U8),
-          ]),
-          new MoveVector([
-            MoveVector.MoveString(EXPECTED_VECTOR_STRING),
-            MoveVector.MoveString(EXPECTED_VECTOR_STRING),
-            MoveVector.MoveString(EXPECTED_VECTOR_STRING),
-          ]),
+          new MoveVector([EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8, EXPECTED_VECTOR_U8]),
+          new MoveVector([EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING, EXPECTED_VECTOR_STRING]),
           deeplyNested3,
           deeplyNested4,
         ],
@@ -521,131 +586,6 @@ describe("various transaction arguments", () => {
         feePayerAccount,
       );
       expect(response.success).toBe(true);
-    });
-  });
-
-  describe("view functions", () => {
-    type MoveStructLayoutObject = {
-      inner: string;
-    };
-
-    // To normalize the addresses, since the first Object address starts with a 0, the JSON response doesn't include it
-    // but ours does.
-    const normalizer = (vectorOfObjects: Array<MoveStructLayoutObject>) => {
-      return vectorOfObjects.map((obj: any) => {
-        return { inner: AccountAddress.fromRelaxed(obj.inner).toString() };
-      });
-    };
-
-    // Note that this returns:
-    //   (
-    //      vector<vector<u8>>,
-    //      vector<vector<Object<EmptyResource>>>,
-    //      vector<Option<vector<Object<EmptyResource>>>>,
-    //      vector<vector<Option<vector<Object<EmptyResource>>>>>,
-    //   )
-    it("correctly expects the view function complex outputs", async () => {
-      const viewFunctionResponse = (await aptos.view({
-        payload: {
-          function: `${senderAccount.accountAddress.toString()}::tx_args_module::view_complex_outputs`,
-          functionArguments: [],
-          typeArguments: [],
-        },
-      })) as any;
-      expect(viewFunctionResponse.length == 4).toBe(true);
-
-      // serialize without length
-      const expectedVectorU8HexString = new FixedBytes(EXPECTED_VECTOR_U8).bcsToHex().toString();
-      expect(viewFunctionResponse[0]).toEqual([
-        expectedVectorU8HexString,
-        expectedVectorU8HexString,
-        expectedVectorU8HexString,
-      ]);
-
-      // We need each obj to be in the format: `{ inner: "0x..." }`
-      const vectorObjectEmptyResource = moduleObjects.map((obj) => {
-        return { inner: obj.toString() };
-      });
-      // We must normalize the object addresses in the response
-      expect(viewFunctionResponse[1].length == 3).toBe(true);
-      expect(normalizer(viewFunctionResponse[1][0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[1][1])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[1][2])).toEqual(vectorObjectEmptyResource);
-
-      expect(viewFunctionResponse[2].length == 3).toBe(true);
-      expect(viewFunctionResponse[2][0].vec.length == 1).toBe(true);
-      expect(normalizer(viewFunctionResponse[2][0].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[2][1].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[2][2].vec[0])).toEqual(vectorObjectEmptyResource);
-
-      expect(viewFunctionResponse[3].length == 3).toBe(true);
-      expect(viewFunctionResponse[3][0].length == 3).toBe(true);
-      expect(viewFunctionResponse[3][0].length == 3).toBe(true);
-      expect(viewFunctionResponse[3][0][0].vec.length == 1).toBe(true);
-      expect(normalizer(viewFunctionResponse[3][0][0].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][0][1].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][0][2].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][1][0].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][1][1].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][1][2].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][2][0].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][2][1].vec[0])).toEqual(vectorObjectEmptyResource);
-      expect(normalizer(viewFunctionResponse[3][2][2].vec[0])).toEqual(vectorObjectEmptyResource);
-    });
-
-    // Currently fails.
-    it.skip("successfully submits a view function with all argument types", async () => {
-      const viewFunctionArguments = [
-        true,
-        1,
-        2,
-        3,
-        4n.toString(),
-        5n.toString(),
-        6n.toString(),
-        senderAccount.accountAddress.toString(),
-        "expected_string",
-        moduleObjects[0].toString(),
-        Hex.fromHexInput(new Uint8Array([])).toString(),
-        [true, false, true],
-        Hex.fromHexInput(new Uint8Array([0, 1, 2, MAX_U8_NUMBER - 2, MAX_U8_NUMBER - 1, MAX_U8_NUMBER])).toString(),
-        [0, 1, 2, MAX_U16_NUMBER - 2, MAX_U16_NUMBER - 1, MAX_U16_NUMBER],
-        [0, 1, 2, MAX_U32_NUMBER - 2, MAX_U32_NUMBER - 1, MAX_U32_NUMBER],
-        [0, 1, 2, MAX_U64_BIG_INT - BigInt(2), MAX_U64_BIG_INT - BigInt(1), MAX_U64_BIG_INT].map((n) => n.toString()),
-        [0, 1, 2, MAX_U128_BIG_INT - BigInt(2), MAX_U128_BIG_INT - BigInt(1), MAX_U128_BIG_INT].map((n) =>
-          n.toString(),
-        ),
-        [0, 1, 2, MAX_U256_BIG_INT - BigInt(2), MAX_U256_BIG_INT - BigInt(1), MAX_U256_BIG_INT].map((n) =>
-          n.toString(),
-        ),
-        ["0x0", "0xabc", "0xdef", "0x123", "0x456", "0x789"],
-        ["expected_string", "abc", "def", "123", "456", "789"],
-        moduleObjects.map((obj) => {
-          return { inner: obj.toString() };
-        }),
-        { vec: "0x" },
-        { vec: [true] },
-        { vec: MoveOption.U8(1).bcsToHex().toString() },
-        // TODO: Fix the below. they currently do not work.
-        { vec: MoveOption.U16(2).bcsToHex().toString() },
-        { vec: MoveOption.U32(3).bcsToHex().toString() },
-        { vec: MoveOption.U64(4).bcsToHex().toString() },
-        { vec: MoveOption.U128(5).bcsToHex().toString() },
-        { vec: MoveOption.U256(6).bcsToHex().toString() },
-        [senderAccount.accountAddress.toString()],
-        ["expected_string"],
-        [moduleObjects[0].toString()],
-      ];
-
-      // Currently does not work. Fails at the 24th tx arg as noted in the arg array above.
-      const viewFunctionResponse = await aptos.view({
-        payload: {
-          function: `${senderAccount.accountAddress.toString()}::tx_args_module::view_all_arguments`,
-          functionArguments: viewFunctionArguments,
-          typeArguments: [],
-        },
-      });
-      console.log(viewFunctionResponse);
     });
   });
 });

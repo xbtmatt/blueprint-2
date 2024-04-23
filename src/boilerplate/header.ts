@@ -24,9 +24,7 @@ export const getBoilerplateImports = (sdkPath?: string): string => {
       Account, Aptos, AptosConfig, EntryFunctionArgumentTypes,
       AccountAddressInput, Hex, HexInput, parseTypeTag, buildTransaction,
       InputGenerateTransactionOptions, RawTransaction, RawTransactionWithData,
-      ${InputTransactionType.FeePayer}, ${InputTransactionType.MultiAgent},
-      ${InputTransactionType.SingleSigner}, WaitForTransactionOptions,
-      UserTransactionResponse, MoveValue
+      WaitForTransactionOptions, UserTransactionResponse, MoveValue
     } from "${sdkPath ?? DEFAULT_SDK_PATH}";
     import { InputTypes, Option, MoveObject, ObjectAddress, TypeTagInput, Uint8, Uint16, Uint32, Uint64, Uint128, Uint256,
               Uint64String, Uint128String, Uint256String, AccountAddressString, ObjectAddressStruct } from ${ABI_TYPES_FILE};
