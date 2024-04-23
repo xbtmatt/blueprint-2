@@ -950,41 +950,41 @@
 //     });
 //   });
 
-  // describe("the example.move file with more meaningful examples", () => {
-  //   // We use the base builders to check the fully qualified function call name- not fee payer/secondary signers
-  //   it("tests the example.move code", async () => {
-  //     const [objAddress] = await new Example.GetObjAddress().submit({ aptos });
-  //     console.log(objAddress);
+// describe("the example.move file with more meaningful examples", () => {
+//   // We use the base builders to check the fully qualified function call name- not fee payer/secondary signers
+//   it("tests the example.move code", async () => {
+//     const [objAddress] = await new Example.GetObjAddress().submit({ aptos });
+//     console.log(objAddress);
 
-  //     // this will only work one time after publish.
-  //     await Example.MoveValuesToObject.submit(
-  //       aptos.config,
-  //       senderAccount,
-  //       secondarySignerAccounts[0],
-  //       secondarySignerAccounts[1],
-  //       true,
-  //       123,
-  //       "this is a strrreeeing",
-  //       new U64(100),
-  //       new U128(1000),
-  //       MoveVector.U8([1, 2, 3]),
-  //       ["u64", "u128", "vector<u8>"],
-  //     );
+//     // this will only work one time after publish.
+//     await Example.MoveValuesToObject.submit(
+//       aptos.config,
+//       senderAccount,
+//       secondarySignerAccounts[0],
+//       secondarySignerAccounts[1],
+//       true,
+//       123,
+//       "this is a strrreeeing",
+//       new U64(100),
+//       new U128(1000),
+//       MoveVector.U8([1, 2, 3]),
+//       ["u64", "u128", "vector<u8>"],
+//     );
 
-  //     // const response = await new Example.ViewObjectValues(
-  //     //   objAddress,
-  //     //   [`${PUBLISHER_ACCOUNT_ADDRESS}::example::SomeResource<u64, u128, vector<u8>>`, "u64", "u128", "vector<u8>"],
-  //     // ).submit({ aptos });
+//     // const response = await new Example.ViewObjectValues(
+//     //   objAddress,
+//     //   [`${PUBLISHER_ACCOUNT_ADDRESS}::example::SomeResource<u64, u128, vector<u8>>`, "u64", "u128", "vector<u8>"],
+//     // ).submit({ aptos });
 
-  //     // console.log(response);
-  //   });
-  // });
+//     // console.log(response);
+//   });
+// });
 
-  // // TODO: Fix, currently broken
-  // it.skip("tests view_complex_outputs, a view function with complex, nested output types", async () => {
-  //   const viewComplexOutputs = await new TxArgsModule.ViewComplexOutputs().submit({
-  //     aptos,
-  //   });
+// // TODO: Fix, currently broken
+// it.skip("tests view_complex_outputs, a view function with complex, nested output types", async () => {
+//   const viewComplexOutputs = await new TxArgsModule.ViewComplexOutputs().submit({
+//     aptos,
+//   });
 
 //     /*
 

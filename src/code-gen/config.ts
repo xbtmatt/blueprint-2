@@ -1,6 +1,3 @@
-// Copyright © Aptos Foundation
-// SPDX-License-Identifier: Apache-2.0
-
 import { AccountAddress } from "@aptos-labs/ts-sdk";
 import fs from "fs";
 import yaml from "js-yaml";
@@ -27,6 +24,7 @@ export type ConfigDictionary = {
   separateViewAndEntryFunctionsByNamespace: boolean;
   sdkPath: string;
   sourceCodePath: Record<string, string>;
+  passInModuleAddress: boolean;
 };
 
 export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
@@ -36,6 +34,7 @@ export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
       "0x3": "aptos_token",
       "0x4": "aptos_token_objects",
     },
+    // TODO: Document defaults at some point in `config.yaml`.
     namedTypeTags: {},
     structArgs: false,
     outputPath: "./generated/",
@@ -47,6 +46,7 @@ export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
     separateViewAndEntryFunctionsByNamespace: true,
     sdkPath: "@aptos-labs/ts-sdk",
     sourceCodePath: {},
+    passInModuleAddress: false,
   };
   if (configFilePath !== undefined && configFilePath.length > 0) {
     if (!fs.existsSync(configFilePath)) {
@@ -58,11 +58,11 @@ export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
   const config: ConfigDictionary = loadedConfig;
   const namedAddresses = config.namedAddresses;
   const sourceCodePath = config.sourceCodePath;
+  // Normalize all address keys.
   if (namedAddresses !== undefined) {
     Object.keys(namedAddresses).forEach((key) => {
       const address = namedAddresses[key];
       delete namedAddresses[key];
-      // normalize the address key
       const normalizedKey = AccountAddress.from(key).toString();
       namedAddresses[normalizedKey] = address;
     });
@@ -71,7 +71,6 @@ export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
     Object.keys(sourceCodePath).forEach((key) => {
       const address = sourceCodePath[key];
       delete sourceCodePath[key];
-      // normalize the address key
       const normalizedKey = AccountAddress.from(key).toString();
       sourceCodePath[normalizedKey] = address;
     });

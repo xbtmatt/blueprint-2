@@ -36,6 +36,7 @@ export class EntryFunctionTransactionBuilder {
   public readonly aptos: Aptos;
   public readonly rawTransactionInput: AnyRawTransaction;
 
+  // TODO: This should probably be private, if it's possible.
   constructor(payloadBuilder: EntryFunctionPayloadBuilder, aptos: Aptos, rawTransactionInput: AnyRawTransaction) {
     this.payloadBuilder = payloadBuilder;
     this.aptos = aptos;
@@ -136,7 +137,7 @@ export class EntryFunctionTransactionBuilder {
 }
 
 export abstract class EntryFunctionPayloadBuilder extends Serializable {
-  public abstract moduleAddress: AccountAddress;
+  public abstract readonly moduleAddress: AccountAddress;
   public abstract readonly moduleName: string;
   public abstract readonly functionName: string;
   public abstract readonly args: any;
@@ -172,7 +173,7 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
 
 // TODO: Allow for users to store/serialize arguments as BCS classes or JSON/simple entry function argument types
 export abstract class ViewFunctionPayloadBuilder<T extends Array<MoveValue>> {
-  public abstract moduleAddress: AccountAddress;
+  public abstract readonly moduleAddress: AccountAddress;
   public abstract readonly moduleName: string;
   public abstract readonly functionName: string;
   public abstract readonly args: any;

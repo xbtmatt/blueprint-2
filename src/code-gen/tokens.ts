@@ -1,6 +1,3 @@
-// Copyright © Aptos Foundation
-// SPDX-License-Identifier: Apache-2.0
-
 export const DEFAULT_ARGUMENT_BASE = "arg_";
 export const R_PARENTHESIS = ")";
 

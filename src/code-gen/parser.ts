@@ -1,6 +1,3 @@
-// Copyright © Aptos Foundation
-// SPDX-License-Identifier: Apache-2.0
-
 import {
   AccountAddress,
   Aptos,
@@ -9,6 +6,7 @@ import {
   parseTypeTag,
   TypeTagAddress,
   TypeTagSigner,
+  TransactionAuthenticatorSingleSender,
 } from "@aptos-labs/ts-sdk";
 import { getArgNameMapping, getMoveFunctionsWithArgumentNames, getSourceCodeMap } from "./packageMetadata.js";
 import {
@@ -79,6 +77,7 @@ export class CodeGenerator {
       documentation,
       viewFunction,
       structArgs,
+      passInModuleAddress,
     } = args;
     // These are the parsed type tags from the source code
     const genericTypeTagsString = args.genericTypeTags ?? "";
@@ -222,7 +221,7 @@ export class CodeGenerator {
     const classFields =
       `
     export class ${className} extends ${entryOrView}FunctionPayloadBuilder${viewFunctionReturnTypes} {
-      public readonly moduleAddress = ${MODULE_ADDRESS_FIELD_NAME};
+      public readonly moduleAddress${passInModuleAddress ? ": AccountAddress" : " = " + MODULE_ADDRESS_FIELD_NAME};
       public readonly moduleName = "${moduleName}";
       public readonly functionName = "${functionName}";
       public readonly args: ${functionArguments.length > 0 ? argsType : "{ }"};
@@ -240,6 +239,7 @@ export class CodeGenerator {
 
     // ------------------------------ Constructor input types ------------------------------ //
     // constructor fields
+    const constructorModuleAddress = this.config.passInModuleAddress ? ["moduleAddress: AccountAddressInput,"] : [];
     const constructorSenders = new Array<string>();
     const constructorOtherArgs = new Array<string>();
     const noSignerArgEntryFunction = !viewFunction && signerArguments.length === 0;
@@ -248,6 +248,11 @@ export class CodeGenerator {
       lines.push(`${viewFunction ? "" : "private"} constructor(${CONSTRUCTOR_ARGS_VARIABLE_NAME}: {`);
     } else {
       lines.push(`${viewFunction ? "" : "private"} constructor(`);
+    }
+    if (this.config.passInModuleAddress) {
+      lines.push(
+        `moduleAddress: ${accountAddressInputString}, // The module address. You can turn this option off in your config.yaml.`,
+      );
     }
     signerArguments.forEach((signerArgument, i) => {
       // signers are `AccountAddress` in the constructor signature because we're just generating the raw transaction here.
@@ -292,7 +297,7 @@ export class CodeGenerator {
     lines.push("super();");
     let destructuredArgs: string | undefined;
     if (structArgs) {
-      const destructuredArgVariableNames = [...constructorSenders, ...constructorOtherArgs]
+      const destructuredArgVariableNames = [...constructorModuleAddress, ...constructorSenders, ...constructorOtherArgs]
         .map((c) => c.split(":")[0].trim().replace("?", ""))
         .join(", ");
       destructuredArgs = `const \{ ${destructuredArgVariableNames} \} = ${CONSTRUCTOR_ARGS_VARIABLE_NAME};`;
@@ -301,6 +306,9 @@ export class CodeGenerator {
     const signerArgumentNamesAsClasses = signerArgumentNames.map(
       (signerArgumentName) => `AccountAddress.from(${signerArgumentName})`,
     );
+    if (this.config.passInModuleAddress) {
+      lines.push(`this.moduleAddress = AccountAddress.from(moduleAddress);`);
+    }
     const primarySenderAssignment = `this.${PRIMARY_SENDER_FIELD_NAME} = ${signerArgumentNamesAsClasses[0]};`;
     const secondarySenderAssignment = `this.${SECONDARY_SENDERS_FIELD_NAME} = [${signerArgumentNamesAsClasses
       .slice(1)
@@ -437,6 +445,7 @@ export class CodeGenerator {
 
     const returnType = EntryFunctionTransactionBuilder.name;
     const builderFunctionArgs =
+      (this.config.passInModuleAddress ? `moduleAddress: AccountAddressInput,\n` : "") +
       "aptosConfig: AptosConfig,\n" +
       (constructorSenders.join("\n") + "\n") +
       (constructorOtherArgs.slice(0, -1).join("\n") + (constructorOtherArgs.slice(0, -1).length > 0 ? "\n" : "")) +
@@ -457,6 +466,7 @@ export class CodeGenerator {
       builderFunctionSignature = builderFunctionArgs;
 
       payloadBuilderConstructorArgs =
+        (this.config.passInModuleAddress ? `moduleAddress,\n` : "") +
         constructorSenders.map((s) => s.split(":")[0]).join(",\n") +
         conditionalCommaAndNewLine +
         constructorOtherArgs
@@ -544,6 +554,7 @@ export class CodeGenerator {
     const conditionalCommaAndNewLineOtherArgs = constructorOtherArgs.slice(0, -1).length > 0 ? ",\n" : "";
 
     const submitFunctionArgs =
+      (this.config.passInModuleAddress ? `moduleAddress: AccountAddressInput,\n` : "") +
       "aptosConfig: AptosConfig,\n" +
       (constructorSenders.join("\n") + "\n") +
       (constructorOtherArgs.slice(0, -1).join("\n") + (constructorOtherArgs.slice(0, -1).length > 0 ? "\n" : "")) +
@@ -567,11 +578,12 @@ export class CodeGenerator {
       destructuredArgs = `const {
         ${primarySender}: primarySigner,
         waitForTransactionOptions,
-        feePayer
+        feePayer,
       } = ${CONSTRUCTOR_ARGS_VARIABLE_NAME};\n`;
     } else {
       submitFunctionSignature = "\n" + submitFunctionArgs + "\n";
       submitConstructorArgs =
+        (this.config.passInModuleAddress ? "moduleAddress,\n" : "") +
         "aptosConfig,\n" +
         constructorSenders.map((s) => `${s.split(":")[0]}.accountAddress`).join(",\n") +
         conditionalCommaAndNewLine +
@@ -783,6 +795,7 @@ export class CodeGenerator {
                       displayFunctionSignature: true,
                     },
                     structArgs: this.config.structArgs,
+                    passInModuleAddress: this.config.passInModuleAddress,
                   });
                   return generatedClassesCode;
                 } catch (e) {

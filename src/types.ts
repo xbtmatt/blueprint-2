@@ -1,6 +1,3 @@
-// Copyright © Aptos Foundation
-// SPDX-License-Identifier: Apache-2.0
-
 import {
   AccountAddress,
   AccountAddressInput,
@@ -167,4 +164,5 @@ export type codeGeneratorOptions = {
     fullStructNames?: boolean;
   };
   structArgs: boolean;
+  passInModuleAddress: boolean;
 };

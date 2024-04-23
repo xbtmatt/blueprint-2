@@ -1,6 +1,3 @@
-// Copyright © Aptos Foundation
-// SPDX-License-Identifier: Apache-2.0
-
 import { AccountAddress, AccountAddressInput, AccountAuthenticator, TypeTag } from "@aptos-labs/ts-sdk";
 
 export type Option<T> = [T] | [];

@@ -1,6 +1,3 @@
-// Copyright © Aptos Foundation
-// SPDX-License-Identifier: Apache-2.0
-
 import { TypeTag, TypeTagReference, TypeTagSigner } from "@aptos-labs/ts-sdk";
 import { TypeTagEnum } from "../types.js";
 

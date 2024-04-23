@@ -1,6 +1,3 @@
-// Copyright © Aptos Foundation
-// SPDX-License-Identifier: Apache-2.0
-
 import { TypeTag, TypeTagVector, TypeTagAddress } from "@aptos-labs/ts-sdk";
 import { numberToLetter, toTypeTagEnum, TypeTagEnum, toClassString } from "../index.js";
 import { R_PARENTHESIS } from "../index.js";

@@ -1,6 +1,3 @@
-// Copyright © Aptos Foundation
-// SPDX-License-Identifier: Apache-2.0
-
 import { InputTransactionType } from "../code-gen/tokens.js";
 
 export const FOR_GENERATION_DIRECTORY = "boilerplate";
