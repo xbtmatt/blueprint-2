@@ -1,14 +1,14 @@
 import {
   AccountAddress,
-  AccountAddressInput,
-  MoveFunction,
-  MoveFunctionGenericTypeParam,
-  Uint128,
-  Uint16,
-  Uint256,
-  Uint32,
-  Uint64,
-  Uint8,
+  type AccountAddressInput,
+  type MoveFunction,
+  type MoveFunctionGenericTypeParam,
+  type Uint128,
+  type Uint16,
+  type Uint256,
+  type Uint32,
+  type Uint64,
+  type Uint8,
   Bool,
   MoveOption,
   MoveString,
@@ -20,9 +20,8 @@ import {
   U64,
   U8,
   AccountAuthenticator,
-  TypeTag,
+  type TypeTag,
   TypeTagStruct,
-  RawTransaction,
 } from "@aptos-labs/ts-sdk";
 
 // If you change the "SimpleMapToKind" list of keys you need to change this name here.
@@ -46,8 +45,12 @@ export type ArgumentNamesWithTypes = {
   typeTag: string;
 };
 
-export type ModuleFunctionArgNameMap = Record<string, Record<string, ArgumentNamesWithTypesAndGenericTypes>>;
+export type ModuleFunctionArgNameMap = Record<
+  string,
+  Record<string, ArgumentNamesWithTypesAndGenericTypes>
+>;
 
+/* eslint-disable @typescript-eslint/no-shadow */
 export enum TypeTagEnum {
   Bool = "Bool",
   U8 = "U8",
@@ -65,8 +68,10 @@ export enum TypeTagEnum {
   Signer = "Signer",
   Generic = "Generic",
 }
+/* eslint-enable @typescript-eslint/no-shadow */
 
-export type GenericTypeName = `T${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | ""}`;
+export type GenericTypeName =
+  `T${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | ""}`;
 
 export type ObjectAddress = AccountAddressInput;
 export type InputTypes =
@@ -105,8 +110,12 @@ export type PackageSourceCode = {
 
 /**
  * Tracks information about the entry function argument
- * @kindArray - the type of each argument inwards, e.g. MoveOption<MoveVector<u64>>> would be [MoveOption, MoveVector, U64]
+ *
+ * @typeTagArray - a flattened array of each type argument, flattened inwards
+ *   e.g. MoveOption<MoveVector<u64>>> would be [MoveOption, MoveVector, U64]
+ *
  * @kindString - the string representation of the kind, aka its type
+ *
  * @annotation - the original Move argument TypeTag string
  */
 export type AnnotatedBCSArgument = {
@@ -147,7 +156,7 @@ export type ABIGeneratedCodeMap = Record<string, ABIGeneratedCode>;
 
 export type MoveObject = AccountAddress;
 
-export type codeGeneratorOptions = {
+export type CodeGeneratorOptions = {
   moduleAddress: AccountAddress;
   moduleName: string;
   functionName: string;

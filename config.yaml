@@ -6,13 +6,19 @@ namedAddresses:
   "0xabcde341afbc4d846a4453bf042dffe74a137c0f0b50c548a87f726f4b1d62ed": monsters
   "0x7e783b349d3e89cf5931af376ebeadbfab855b3fa239b7ada8f5a92fbea6b387": pyth
   "0x7d7e436f0b2aafde60774efb26ccc432cf881b677aca7faaf2a01879bd19fb8": switchboard
+  "0xc0deb00c405f84c85dc13442e305df75d1288100cdd82675695f6148c7ece51c": econia
+  "0xce91529063355db0dd53b504df4050f450e11bf592a41c54a3a18a7d34c058b6": emojicoin_dot_fun
 sourceCodePath:
-  "0xfe90d14861596104b5bca9d9e315fc4c10ebd9fc7727e9cf97dfc92b36340d11": "/some/path/on/disk/"
+  "0xce91529063355db0dd53b504df4050f450e11bf592a41c54a3a18a7d34c058b6": "/home/dev/emojicoin/src/move/emojicoin_dot_fun/sources/"
+  "0x1": "/home/dev/aptos/aptos-core-1/aptos-move/framework/aptos_framework/sources/"
+  "0x3": "/home/dev/aptos/aptos-core-1/aptos-move/framework/aptos_token/sources/"
+  "0x4": "/home/dev/aptos/aptos-core-1/aptos-move/framework/aptos_token_objects/sources/"
 namedTypeTags:
   "0x4::token::Token": "Token"
   "0x4::collection::Collection": "Collection"
 
 structArgs: true
+passInModuleAddress: true
 outputPath: "./generated/"
 functionComments: true
 expandedStructs: false
@@ -23,3 +29,4 @@ separateViewAndEntryFunctionsByNamespace: false
 viewFunctionsNamespace: "ViewFuncs"
 entryFunctionsNamespace: "EntryFuncs"
 sdkPath: "@aptos-labs/ts-sdk"
+variableCaseStyle: "camelCase"

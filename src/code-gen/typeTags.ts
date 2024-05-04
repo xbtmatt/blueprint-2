@@ -1,4 +1,4 @@
-import { TypeTag, TypeTagReference, TypeTagSigner } from "@aptos-labs/ts-sdk";
+import { type TypeTag, TypeTagReference } from "@aptos-labs/ts-sdk";
 import { TypeTagEnum } from "../types.js";
 
 export function isReference(typeTag: TypeTag): typeTag is TypeTagReference {
@@ -28,33 +28,43 @@ export function truncatedTypeTagString(args: {
       typeTag: typeTag.value,
       namedAddresses,
       namedTypeTags,
-      genericTypeTags: genericTypeTags,
+      genericTypeTags,
     })}>`;
   }
   if (typeTag.isStruct()) {
     if (typeTag.isOption()) {
       return `Option<${typeTag.value.typeArgs
-        .map((typeTag) =>
-          truncatedTypeTagString({ typeTag, namedAddresses, namedTypeTags, genericTypeTags: genericTypeTags }),
+        .map((t) =>
+          truncatedTypeTagString({
+            typeTag: t,
+            namedAddresses,
+            namedTypeTags,
+            genericTypeTags,
+          }),
         )
         .join(", ")}>`;
     }
     if (typeTag.isObject()) {
       return `Object<${typeTag.value.typeArgs
-        .map((typeTag) =>
-          truncatedTypeTagString({ typeTag, namedAddresses, namedTypeTags, genericTypeTags: genericTypeTags }),
+        .map((t) =>
+          truncatedTypeTagString({
+            typeTag: t,
+            namedAddresses,
+            namedTypeTags,
+            genericTypeTags,
+          }),
         )
         .join(", ")}>`;
     }
     if (typeTag.isString()) {
-      return `String`;
+      return "String";
     }
-    // TODO: also replace named addresses?
     if (typeTag.toString() in namedTypeTags) {
       return namedTypeTags[typeTag.toString()];
     }
     if (typeTag.value.address.toString() in namedAddresses) {
-      return `${namedAddresses[typeTag.value.address.toString()]}::${typeTag.value.moduleName.identifier}::${
+      const ttValue = typeTag.value;
+      return `${namedAddresses[ttValue.address.toString()]}::${ttValue.moduleName.identifier}::${
         typeTag.value.name.identifier
       }`;
     }
@@ -80,8 +90,9 @@ export function truncatedTypeTagString(args: {
   return typeTag.toString();
 }
 
-// This function flattens an entry function argument TypeTag into an array of TypeTags, with the first being the outermost TypeTag
-// that is potentially a TypeTagStruct with an inner .value that is a TypeTag
+// This function flattens an entry function argument TypeTag into an array of TypeTags,
+// with the first being the outermost TypeTag that is potentially a TypeTagStruct with
+// an inner .value that is a TypeTag.
 export function toFlattenedTypeTag(typeTag: TypeTag): Array<TypeTag> {
   if (typeTag.isVector()) {
     return [typeTag, ...toFlattenedTypeTag(typeTag.value)];

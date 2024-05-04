@@ -1,10 +1,10 @@
 export const DEFAULT_ARGUMENT_BASE = "arg_";
 export const R_PARENTHESIS = ")";
 
-export const PRIMARY_SENDER_FIELD_NAME = "primarySender";
-export const SECONDARY_SENDERS_FIELD_NAME = "secondarySenders";
-export const FEE_PAYER_FIELD_NAME = "feePayer";
-export const MODULE_ADDRESS_FIELD_NAME = "MODULE_ADDRESS";
+export const PRIMARY_SENDER_VAR_NAME = "primarySender";
+export const SECONDARY_SENDERS_VAR_NAME = "secondarySenders";
+export const FEE_PAYER_VAR_NAME = "feePayer";
+export const MODULE_ADDRESS_VAR_NAME = "MODULE_ADDRESS";
 
 // private constructor(CONSTRUCTOR_ARGS_VARIABLE_NAME: { ... })
 export const CONSTRUCTOR_ARGS_VARIABLE_NAME = "args";

@@ -1,43 +1,43 @@
 import {
-  Aptos,
+  type Aptos,
   Account,
-  AccountAddress,
+  type AccountAddress,
   EntryFunction,
-  EntryFunctionArgumentTypes,
+  type EntryFunctionArgumentTypes,
   Identifier,
   ModuleId,
   MultiSig,
   TransactionPayloadEntryFunction,
-  TypeTag,
-  LedgerVersionArg,
-  UserTransactionResponse,
-  WaitForTransactionOptions,
+  type TypeTag,
+  type LedgerVersionArg,
+  type UserTransactionResponse,
+  type WaitForTransactionOptions,
   Serializable,
-  Serializer,
-  EntryFunctionPayloadResponse,
-  AnyRawTransaction,
+  type Serializer,
+  type EntryFunctionPayloadResponse,
+  type AnyRawTransaction,
   AccountAuthenticator,
-  SimpleEntryFunctionArgumentTypes,
-  InputViewFunctionData,
+  type SimpleEntryFunctionArgumentTypes,
+  type InputViewFunctionData,
   TransactionPayloadMultiSig,
   MultiSigTransactionPayload,
-  MoveValue,
+  type MoveValue,
 } from "@aptos-labs/ts-sdk";
-import { WalletSignTransactionFunction } from "./types";
-
-// Only used in tests right now, since it's cumbersome to check static methods on different class instances with an interface.
-export interface TransactionBuilder {
-  builder: (...args: any[]) => Promise<EntryFunctionTransactionBuilder>;
-  submit: (...args: any[]) => Promise<UserTransactionResponse>;
-}
+import { type WalletSignTransactionFunction } from "./types";
 
 export class EntryFunctionTransactionBuilder {
   public readonly payloadBuilder: EntryFunctionPayloadBuilder;
+
   public readonly aptos: Aptos;
+
   public readonly rawTransactionInput: AnyRawTransaction;
 
   // TODO: This should probably be private, if it's possible.
-  constructor(payloadBuilder: EntryFunctionPayloadBuilder, aptos: Aptos, rawTransactionInput: AnyRawTransaction) {
+  constructor(
+    payloadBuilder: EntryFunctionPayloadBuilder,
+    aptos: Aptos,
+    rawTransactionInput: AnyRawTransaction,
+  ) {
     this.payloadBuilder = payloadBuilder;
     this.aptos = aptos;
     this.rawTransactionInput = rawTransactionInput;
@@ -45,13 +45,19 @@ export class EntryFunctionTransactionBuilder {
 
   /**
    *
-   * @param signer either a local Account or a callback function that returns an AccountAuthenticator
+   * @param signer a local Account or a callback function that returns an AccountAuthenticator
    * @param asFeePayer whether or not the signer is the fee payer
    * @returns a Promise<AccountAuthenticator>
    */
-  async sign(signer: Account | WalletSignTransactionFunction, asFeePayer?: boolean): Promise<AccountAuthenticator> {
+  async sign(
+    signer: Account | WalletSignTransactionFunction,
+    asFeePayer?: boolean,
+  ): Promise<AccountAuthenticator> {
+    /* eslint-disable-next-line no-prototype-builtins */
     if (signer.hasOwnProperty("privateKey") || signer instanceof Account) {
-      const signingFunction = asFeePayer ? this.aptos.transaction.signAsFeePayer : this.aptos.transaction.sign;
+      const signingFunction = asFeePayer
+        ? this.aptos.transaction.signAsFeePayer
+        : this.aptos.transaction.sign;
       const accountAuthenticator = signingFunction({
         signer: signer as Account,
         transaction: this.rawTransactionInput,
@@ -60,7 +66,8 @@ export class EntryFunctionTransactionBuilder {
     }
     return signer(this.rawTransactionInput, asFeePayer);
   }
-  // To be used by a static `submit` where the user enters named signer arguments
+
+  // To be used by a static `submit` where the user enters named signer arguments.
   async submit(args: {
     primarySigner: Account | WalletSignTransactionFunction | AccountAuthenticator;
     secondarySigners?: Array<Account | WalletSignTransactionFunction | AccountAuthenticator>;
@@ -82,6 +89,7 @@ export class EntryFunctionTransactionBuilder {
         if (signer instanceof AccountAuthenticator) {
           secondarySendersAuthenticators.push(signer);
         } else {
+          /* eslint-disable-next-line no-await-in-loop */
           secondarySendersAuthenticators.push(await this.sign(signer));
         }
       }
@@ -115,11 +123,14 @@ export class EntryFunctionTransactionBuilder {
    * @param optionsArray An array of keys to print out from the transaction response
    * @returns the transaction info as an object
    */
-  responseInfo(response: UserTransactionResponse, optionsArray?: Array<keyof UserTransactionResponse>) {
+  static responseInfo(
+    response: UserTransactionResponse,
+    optionsArray?: Array<keyof UserTransactionResponse>,
+  ) {
     const payload = response.payload as EntryFunctionPayloadResponse;
 
     const keysToPrint: Record<string, any> = {};
-    for (const key in optionsArray) {
+    for (const key of optionsArray ?? []) {
       keysToPrint[key] = response[key as keyof typeof response];
     }
 
@@ -138,15 +149,24 @@ export class EntryFunctionTransactionBuilder {
 
 export abstract class EntryFunctionPayloadBuilder extends Serializable {
   public abstract readonly moduleAddress: AccountAddress;
+
   public abstract readonly moduleName: string;
+
   public abstract readonly functionName: string;
+
   public abstract readonly args: any;
+
   public abstract readonly typeTags: Array<TypeTag>;
+
   public abstract readonly primarySender: AccountAddress;
+
   public abstract readonly secondarySenders?: Array<AccountAddress>;
+
   public abstract readonly feePayer?: AccountAddress;
 
-  createPayload(multisigAddress?: AccountAddress): TransactionPayloadEntryFunction | TransactionPayloadMultiSig {
+  createPayload(
+    multisigAddress?: AccountAddress,
+  ): TransactionPayloadEntryFunction | TransactionPayloadMultiSig {
     const entryFunction = new EntryFunction(
       new ModuleId(this.moduleAddress, new Identifier(this.moduleName)),
       new Identifier(this.functionName),
@@ -157,9 +177,8 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
       return new TransactionPayloadMultiSig(
         new MultiSig(multisigAddress, new MultiSigTransactionPayload(entryFunction)),
       );
-    } else {
-      return new TransactionPayloadEntryFunction(entryFunction);
     }
+    return new TransactionPayloadEntryFunction(entryFunction);
   }
 
   argsToArray(): Array<EntryFunctionArgumentTypes> {
@@ -171,18 +190,23 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
   }
 }
 
-// TODO: Allow for users to store/serialize arguments as BCS classes or JSON/simple entry function argument types
 export abstract class ViewFunctionPayloadBuilder<T extends Array<MoveValue>> {
   public abstract readonly moduleAddress: AccountAddress;
+
   public abstract readonly moduleName: string;
+
   public abstract readonly functionName: string;
+
   public abstract readonly args: any;
+
   public abstract readonly typeTags: Array<TypeTag>;
 
   toPayload(): InputViewFunctionData {
     return {
       function: `${this.moduleAddress.toString()}::${this.moduleName}::${this.functionName}`,
-      typeArguments: this.typeTags.map((type) => type.toString() as `0x${string}::${string}::${string}`),
+      typeArguments: this.typeTags.map(
+        (type) => type.toString() as `0x${string}::${string}::${string}`,
+      ),
       functionArguments: this.argsToArray(),
     };
   }

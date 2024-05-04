@@ -1,22 +1,22 @@
+/* eslint-disable no-console */
 import {
   Aptos,
   AptosConfig,
-  AccountAddress,
-  MoveFunction,
-  MoveModule,
-  Network,
-  stringStructTag,
+  type AccountAddress,
+  type MoveFunction,
+  type MoveModule,
+  type Network,
 } from "@aptos-labs/ts-sdk";
-import {
-  ArgumentNamesWithTypes,
-  ModuleFunctionArgNameMap,
-  ModuleMetadata,
-  MoveFunctionWithArgumentNamesAndGenericTypes,
-  PackageMetadata,
-  transformCode,
-} from "../index.js";
 import { existsSync, readFileSync, statSync } from "fs";
 import path from "path";
+import {
+  type PackageMetadata,
+  type ModuleMetadata,
+  type ArgumentNamesWithTypes,
+  type ModuleFunctionArgNameMap,
+  type MoveFunctionWithArgumentNamesAndGenericTypes,
+} from "../types";
+import { transformCode } from "../utils";
 
 // sort the abiFunctions by moduleName alphabetically
 export const sortByNameField = (objs: any[]): any[] => {
@@ -29,7 +29,10 @@ export const sortByNameField = (objs: any[]): any[] => {
   return objs;
 };
 
-export async function getPackageMetadata(accountAddress: AccountAddress, network: Network): Promise<PackageMetadata[]> {
+export async function getPackageMetadata(
+  accountAddress: AccountAddress,
+  network: Network,
+): Promise<PackageMetadata[]> {
   const aptos = new Aptos(new AptosConfig({ network }));
   const packageMetadata = await aptos.getAccountResource<PackageMetadata[]>({
     accountAddress: accountAddress.toString(),
@@ -55,10 +58,10 @@ export async function getSourceCodeMap(
 ): Promise<Record<string, string>> {
   const packageMetadata = await getPackageMetadata(accountAddress, network);
 
-  let sourceCodeByModuleName: Record<string, string> = {};
+  const sourceCodeByModuleName: Record<string, string> = {};
 
   const sourcePathExists =
-    sourceCodePath != "" &&
+    sourceCodePath !== "" &&
     typeof sourceCodePath !== "undefined" &&
     existsSync(sourceCodePath) &&
     statSync(sourceCodePath).isDirectory();
@@ -67,16 +70,19 @@ export async function getSourceCodeMap(
     pkg.modules.forEach((module: ModuleMetadata) => {
       let filePath: string | undefined;
       let code: string;
-      try {
-        if (sourcePathExists) {
+      if (sourcePathExists) {
+        try {
           filePath = path.join(sourceCodePath, `${module.name}.move`);
           code = readFileSync(filePath, "ascii");
-        } else {
-          throw new Error("Source code path is invalid.");
+        } catch (e) {
+          console.warn(
+            "Failed to read the source code for module",
+            `\`${module.name}\` from ${filePath ?? sourceCodePath}.`,
+          );
+          console.warn("Attempting to parse source code from the package metadata instead.");
+          code = transformCode(module.source);
         }
-      } catch (e) {
-        console.warn(`Failed to read source code for module ${module.name} from ${filePath ?? sourceCodePath}.`);
-        console.warn("Attempting to parse source code from the package metadata instead.");
+      } else {
         code = transformCode(module.source);
       }
       sourceCodeByModuleName[module.name] = code;
@@ -101,8 +107,11 @@ export function removeComments(code: string): string {
   return noComments;
 }
 
-export function extractSignature(functionName: string, sourceCode: string): FunctionSignatureWithTypeTags {
-  sourceCode = removeComments(sourceCode);
+export function extractSignature(
+  functionName: string,
+  inputSourceCode: string,
+): FunctionSignatureWithTypeTags {
+  const sourceCode = removeComments(inputSourceCode);
   // find the function signature in the source code
   const regex = new RegExp(`fun ${functionName}(<.*>)?\\s*\\(([^)]*)\\)`, "m");
   const match = sourceCode.match(regex);
@@ -111,7 +120,7 @@ export function extractSignature(functionName: string, sourceCode: string): Func
     genericTypeTags = match[1] ? match[1].slice(1, -1) : null;
   }
   return {
-    genericTypeTags: genericTypeTags,
+    genericTypeTags,
     functionSignature: match ? match[2].trim() : null,
   };
 }
@@ -119,15 +128,15 @@ export function extractSignature(functionName: string, sourceCode: string): Func
 export function extractArguments(functionSignature: string): ArgumentNamesWithTypes[] {
   const args = functionSignature.split(",");
   const argumentsList = args
-    .map((arg) => {
-      const [argName, typeTag] = arg.split(":").map((arg) => arg.trim());
+    .map((a) => {
+      const [argName, typeTag] = a.split(":").map((b) => b.trim());
       if (argName && typeTag) {
         return { argName, typeTag };
       }
       return null;
     })
     .filter(
-      (arg) => arg !== null && !(arg.argName.includes("//") || arg.typeTag.includes("//")),
+      (c) => c !== null && !(c.argName.includes("//") || c.typeTag.includes("//")),
     ) as ArgumentNamesWithTypes[];
 
   return argumentsList;
@@ -138,12 +147,12 @@ export function getArgNameMapping(
   funcs: MoveFunction[],
   sourceCode: string,
 ): ModuleFunctionArgNameMap {
-  let modulesWithFunctionSignatures: ModuleFunctionArgNameMap = {};
+  const modulesWithFunctionSignatures: ModuleFunctionArgNameMap = {};
 
-  funcs.map((func) => {
+  funcs.forEach((func) => {
     const { genericTypeTags, functionSignature } = extractSignature(func.name, sourceCode);
     if (functionSignature === null) {
-      // console.warn(`Could not find function signature for ${func.name}`);
+      throw new Error(`Could not find function signature for ${func.name}`);
     } else {
       const args = extractArguments(functionSignature);
       if (!modulesWithFunctionSignatures[abi.name]) {
@@ -169,11 +178,13 @@ export function getMoveFunctionsWithArgumentNames(
     let genericTypes: string | null = null;
     if (abi.name in mapping && func.name in mapping[abi.name]) {
       genericTypes = mapping[abi.name][func.name].genericTypes;
-      argNames = mapping[abi.name][func.name].argumentNamesWithTypes.map((arg: ArgumentNamesWithTypes) => arg.argName);
+      argNames = mapping[abi.name][func.name].argumentNamesWithTypes.map(
+        (arg: ArgumentNamesWithTypes) => arg.argName,
+      );
     } else {
       genericTypes = null;
       argNames = [];
     }
-    return { ...func, genericTypes, argNames: argNames };
+    return { ...func, genericTypes, argNames };
   });
 }

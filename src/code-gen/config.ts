@@ -17,15 +17,21 @@ export type ConfigDictionary = {
   structArgs: boolean;
   outputPath: string;
   functionComments: boolean;
-  expandedStructs: boolean; // 0x1::string::String vs String, 0x1::option::Option vs Option, etc
-  replaceNamedAddresses: boolean; // replace named addresses with their address values in types, e.g. Object<0xbeefcafe::some_resource::Resource> => Object<my_address::some_resource::Resource>
+  expandedStructs: boolean; // 0x1::string::String vs String, 0x1::option::Option vs Option.
+  // Replace named addresses with their address values in types:
+  //   e.g. Object<0xbeefcafe::some_resource::Resource>   becomes
+  //        Object<my_address::some_resource::Resource>
+  replaceNamedAddresses: boolean;
   entryFunctionsNamespace: string;
   viewFunctionsNamespace: string;
   separateViewAndEntryFunctionsByNamespace: boolean;
   sdkPath: string;
   sourceCodePath: Record<string, string>;
   passInModuleAddress: boolean;
+  variableCaseStyle: Exclude<CaseStyles, "PascalCase">;
 };
+
+export type CaseStyles = "camelCase" | "snake_case" | "UPPER_CASE" | "PascalCase";
 
 export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
   let loadedConfig: ConfigDictionary = {
@@ -47,6 +53,7 @@ export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
     sdkPath: "@aptos-labs/ts-sdk",
     sourceCodePath: {},
     passInModuleAddress: false,
+    variableCaseStyle: "camelCase",
   };
   if (configFilePath !== undefined && configFilePath.length > 0) {
     if (!fs.existsSync(configFilePath)) {
@@ -56,8 +63,8 @@ export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
     loadedConfig = yaml.load(configFile) as any;
   }
   const config: ConfigDictionary = loadedConfig;
-  const namedAddresses = config.namedAddresses;
-  const sourceCodePath = config.sourceCodePath;
+  const { namedAddresses } = config;
+  const { sourceCodePath } = config;
   // Normalize all address keys.
   if (namedAddresses !== undefined) {
     Object.keys(namedAddresses).forEach((key) => {
