@@ -269,10 +269,12 @@ export class CodeGenerator {
     const constructorOtherArgs = new Array<string>();
     const noSignerArgEntryFunction = !viewFunction && signerArguments.length === 0;
 
+    const noConstructorArgs =
+      functionArguments.length + signerArguments.length + genericTypeTags.length === 0;
+    const constructorArg = noConstructorArgs ? "" : `${CONSTRUCTOR_ARGS_VARIABLE_NAME}: {`;
+
     if (structArgs) {
-      lines.push(
-        `${viewFunction ? "" : "private"} constructor(${CONSTRUCTOR_ARGS_VARIABLE_NAME}: {`,
-      );
+      lines.push(`${viewFunction ? "" : "private"} constructor(${constructorArg}`);
     } else {
       lines.push(`${viewFunction ? "" : "private"} constructor(`);
     }
@@ -317,7 +319,8 @@ export class CodeGenerator {
 
     // End of the constructor arguments.
     if (structArgs) {
-      lines.push("}) {");
+      const conditionalEndBrace = noConstructorArgs ? "" : "}";
+      lines.push(`${conditionalEndBrace}) {`);
     } else {
       lines.push(") {");
     }
@@ -333,7 +336,9 @@ export class CodeGenerator {
         .map((c) => c.split(":")[0].trim().replace("?", ""))
         .join(", ");
       // Destructured args.
-      lines.push(`const { ${destructuredArgVarNames} } = ${CONSTRUCTOR_ARGS_VARIABLE_NAME};`);
+      if (!noConstructorArgs) {
+        lines.push(`const { ${destructuredArgVarNames} } = ${CONSTRUCTOR_ARGS_VARIABLE_NAME};`);
+      }
     }
     const signerArgumentNamesAsClasses = signerArgumentNames.map(
       (signerArgumentName) => `AccountAddress.from(${signerArgumentName})`,
