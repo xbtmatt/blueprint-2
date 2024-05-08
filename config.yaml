@@ -2,14 +2,15 @@ namedAddresses:
   "0x1": aptos_framework
   "0x3": aptos_token
   "0x4": aptos_token_objects
-  "0x2cca48b8b0d7f77ef28bfd608883c599680c5b8db8192c5e3baaae1aee45114c": args_test_suite
+  "0x4cba8c2b7f78052a6d5d67999620fecc77ea3d691d07f2c787151f9864b0b6a8": tx_args_module
   "0xabcde341afbc4d846a4453bf042dffe74a137c0f0b50c548a87f726f4b1d62ed": monsters
   "0x7e783b349d3e89cf5931af376ebeadbfab855b3fa239b7ada8f5a92fbea6b387": pyth
   "0x7d7e436f0b2aafde60774efb26ccc432cf881b677aca7faaf2a01879bd19fb8": switchboard
   "0xc0deb00c405f84c85dc13442e305df75d1288100cdd82675695f6148c7ece51c": econia
-  "0xce91529063355db0dd53b504df4050f450e11bf592a41c54a3a18a7d34c058b6": emojicoin_dot_fun
+  "0xa2775749a727b0c71adeb8c45dac5c59b1c370f97fba70a5f3e789a96a76d5b0": emojicoin_dot_fun
 sourceCodePath:
-  "0xce91529063355db0dd53b504df4050f450e11bf592a41c54a3a18a7d34c058b6": "/home/dev/emojicoin/src/move/emojicoin_dot_fun/sources/"
+  "0xa2775749a727b0c71adeb8c45dac5c59b1c370f97fba70a5f3e789a96a76d5b0": "/home/dev/emojicoin/src/move/emojicoin_dot_fun/sources/"
+  "0x4cba8c2b7f78052a6d5d67999620fecc77ea3d691d07f2c787151f9864b0b6a8": "/home/dev/ts-sdk/tests/move/arguments/sources/"
   "0x1": "/home/dev/aptos/aptos-core-1/aptos-move/framework/aptos_framework/sources/"
   "0x3": "/home/dev/aptos/aptos-core-1/aptos-move/framework/aptos_token/sources/"
   "0x4": "/home/dev/aptos/aptos-core-1/aptos-move/framework/aptos_token_objects/sources/"
@@ -18,7 +19,7 @@ namedTypeTags:
   "0x4::collection::Collection": "Collection"
 
 structArgs: true
-passInModuleAddress: true
+passInModuleAddress: false
 outputPath: "./generated/"
 functionComments: true
 expandedStructs: false

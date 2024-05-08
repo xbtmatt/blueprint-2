@@ -63,7 +63,6 @@ import {
   toInputTypeString,
   toViewFunctionReturnTypeString,
   transformEntryFunctionInputTypes,
-  transformViewFunctionInputTypes,
 } from "./conversions";
 import { lintAndFormat } from "./linters";
 import { ViewFunctionPayloadBuilder } from "../boilerplate";
@@ -114,8 +113,8 @@ export class CodeGenerator {
           return replacedTypeTag.toString();
         })
         .join(", ");
-    const atleastOneGeneric = (genericTypeTagsString ?? "").length > 0;
-    const genericTypeTagsStringAnnotation = atleastOneGeneric
+    const oneOrMoreGenerics = (genericTypeTagsString ?? "").length > 0;
+    const genericTypeTagsStringAnnotation = oneOrMoreGenerics
       ? `// [${genericTypeTagsString}]`
       : "";
     // denote the explicit number of generic TypeTags necessary to call the function
@@ -123,7 +122,7 @@ export class CodeGenerator {
       genericTypeTags.length,
       "TypeTagInput",
     );
-    const explicitTypeTags = !atleastOneGeneric
+    const explicitTypeTags = !oneOrMoreGenerics
       ? "[] = []"
       : createExplicitArraySizeString(genericTypeTags.length, "TypeTag");
 
@@ -187,25 +186,15 @@ export class CodeGenerator {
     if (functionArguments.length > 0) {
       lines.push(`export type ${argsType} = {`);
       functionArguments.forEach((functionArgument, i) => {
-        if (viewFunction) {
-          const asClassField = true;
-          const viewFunctionInputTypeConverter = toInputTypeString(
-            functionArgument.typeTagArray,
-            viewFunction,
-            asClassField,
-          );
-          lines.push(`${casedFieldNames[i]}: ${viewFunctionInputTypeConverter};`);
-        } else {
-          lines.push(`${casedFieldNames[i]}: ${functionArgument.classString};`);
-        }
+        lines.push(`${casedFieldNames[i]}: ${functionArgument.classString};`);
       });
       lines.push("}");
     }
     lines.push("");
 
     // ----------------------- Documentation ----------------------- //
-    const leftCaret = atleastOneGeneric ? "<" : "";
-    const rightCaret = atleastOneGeneric ? ">" : "";
+    const leftCaret = oneOrMoreGenerics ? "<" : "";
+    const rightCaret = oneOrMoreGenerics ? ">" : "";
     const extraDocLine = "*```";
 
     const funcSignatureLines = new Array<string>();
@@ -232,7 +221,7 @@ export class CodeGenerator {
     const functionSignature = funcSignatureLines.join("\n");
     lines.push(functionSignature);
 
-    const accountAddressInputString = toInputTypeString([new TypeTagAddress()], viewFunction);
+    const accountAddressInputString = toInputTypeString([new TypeTagAddress()]);
     const accountAddressClassString = toClassString(TypeTagEnum.AccountAddress);
 
     const returnTypes = returnValue.map((v) => {
@@ -307,7 +296,7 @@ export class CodeGenerator {
       );
     }
     functionArguments.forEach((functionArgument, i) => {
-      const inputType = toInputTypeString(functionArgument.typeTagArray, viewFunction);
+      const inputType = toInputTypeString(functionArgument.typeTagArray);
       // TODO: Fix option input types. It's just converting them to vectors right now, it should be
       // Option<T>, but the input type is skipping the Option part too early.
       const argComment = ` // ${functionArgument.annotation}`;
@@ -369,23 +358,12 @@ export class CodeGenerator {
 
     lines.push("this.args = {");
     functionArguments.forEach((_, i) => {
-      // Don't use BCS classes for view functions, since they don't need to be serialized
-      // Although we can use them eventually when view functions accepts BCS inputs
-      if (viewFunction) {
-        const viewFunctionInputTypeConverter = transformViewFunctionInputTypes(
-          casedFieldNames[i],
-          functionArguments[i].typeTagArray,
-          0,
-        );
-        lines.push(`${casedFieldNames[i]}: ${viewFunctionInputTypeConverter},`);
-      } else {
-        const entryFunctionInputTypeConverter = transformEntryFunctionInputTypes(
-          casedFieldNames[i],
-          functionArguments[i].typeTagArray,
-          0,
-        );
-        lines.push(`${casedFieldNames[i]}: ${entryFunctionInputTypeConverter},`);
-      }
+      const entryFunctionInputTypeConverter = transformEntryFunctionInputTypes(
+        casedFieldNames[i],
+        functionArguments[i].typeTagArray,
+        0,
+      );
+      lines.push(`${casedFieldNames[i]}: ${entryFunctionInputTypeConverter},`);
     });
     // End of setting this.args = { ...args }.
     lines.push("}");
@@ -456,7 +434,6 @@ export class CodeGenerator {
     explicitTypeTagInputs: string,
     genericTypeTagAnnotation: string,
   ) {
-    const isViewFunction = false;
     const signerArguments = Array.from(inputSignerArguments);
 
     // If there's no signer args in the entry function, we need to add the primary sender to the
@@ -477,7 +454,7 @@ export class CodeGenerator {
       );
     });
     functionArguments.forEach((functionArgument, i) => {
-      const inputType = toInputTypeString(functionArgument.typeTagArray, isViewFunction);
+      const inputType = toInputTypeString(functionArgument.typeTagArray);
       const argComment = ` // ${functionArgument.annotation}`;
       constructorOtherArgs.push(`${casedFieldNames[i]}: ${inputType}, ${argComment}`);
     });
@@ -566,8 +543,7 @@ export class CodeGenerator {
     explicitTypeTagInputs: string,
     genericTypeTagAnnotation: string,
   ) {
-    const isViewFunction = false;
-    const signerInputString = toInputTypeString([new TypeTagSigner()], isViewFunction);
+    const signerInputString = toInputTypeString([new TypeTagSigner()]);
     const signerArguments = Array.from(inputSignerArguments);
 
     // If there's no signer args in the entry function, we need to add the primary sender to the
@@ -588,7 +564,7 @@ export class CodeGenerator {
       );
     });
     functionArguments.forEach((functionArgument, i) => {
-      const inputType = toInputTypeString(functionArgument.typeTagArray, isViewFunction);
+      const inputType = toInputTypeString(functionArgument.typeTagArray);
       const argComment = ` // ${functionArgument.annotation}`;
       constructorOtherArgs.push(`${casedFieldNames[i]}: ${inputType}, ${argComment}`);
     });
@@ -714,10 +690,10 @@ export class CodeGenerator {
           if (flattenedTypeTag[flattenedTypeTag.length - 1].isGeneric()) {
             const genericType = `T${genericsWithAbilities.length}`;
             const moveConstraints = genericTypeParams[genericsWithAbilities.length]?.constraints;
-            const constraints = moveConstraints.join(" + ");
+            const constraints = moveConstraints?.join(" + ");
             // 2, because that's the length of ": ". We don't add it if there are no constraints
             const genericTypeWithConstraints =
-              constraints.length > 2 ? `${genericType}${constraints}` : genericType;
+              constraints?.length > 2 ? `${genericType}${constraints}` : genericType;
             // Check if the second to last type tag is an AccountAddress.
             // It will always be an Object type.
             if (secondToLast.isStruct() && secondToLast.isObject()) {
@@ -733,12 +709,12 @@ export class CodeGenerator {
           }
         }
 
-        let asdf;
+        let typeTagWarning;
         try {
-          asdf = toClassesString(flattenedTypeTag);
+          typeTagWarning = toClassesString(flattenedTypeTag);
         } catch (e) {
           flattenedTypeTag.forEach((t) => console.log(t.toString()));
-          console.log(asdf);
+          console.log(typeTagWarning);
           console.warn(e);
         }
 
@@ -976,7 +952,7 @@ export class CodeGenerator {
           : toPascalCase(namedAddress);
         const filePath = `${baseDirectory}/index.ts`;
         // Read from `index.ts` and check if the namedAddress is already in the file
-        // If it is, don't add it again
+        // If it is, don't add it again.
         const newExport = `export * as ${fileNamedAddress} from "./${namedAddress}/index";\n`;
         generatedIndexFile.push(newExport);
         if (fs.existsSync(filePath)) {

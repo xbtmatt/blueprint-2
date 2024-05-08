@@ -1,8 +1,8 @@
 import { type TypeTag, TypeTagVector, TypeTagAddress } from "@aptos-labs/ts-sdk";
-import { TypeTagEnum } from "src/types";
-import { alphabetIndexToLetter } from "src/utils";
+import { alphabetIndexToLetter } from "../utils";
 import { R_PARENTHESIS } from "./tokens";
 import { toTypeTagEnum, toClassString } from "./typeTags";
+import { TypeTagEnum } from "../types";
 
 export const returnTypeMapForView: { [key in TypeTagEnum]: string } = {
   Bool: "boolean",
@@ -17,24 +17,6 @@ export const returnTypeMapForView: { [key in TypeTagEnum]: string } = {
   Vector: "Array",
   Option: "Option", // OneOrNone<T>
   Object: "ObjectAddressStruct",
-  Signer: "Signer",
-  Generic: "InputTypes",
-  Struct: "Struct",
-};
-
-export const inputTypeMapForView: { [key in TypeTagEnum]: string } = {
-  Bool: "boolean",
-  U8: "Uint8",
-  U16: "Uint16",
-  U32: "Uint32",
-  U64: "string",
-  U128: "string",
-  U256: "string",
-  AccountAddress: "string",
-  String: "string",
-  Vector: "Array",
-  Option: "Option", // OneOrNone<T>
-  Object: "ObjectAddress",
   Signer: "Signer",
   Generic: "InputTypes",
   Struct: "Struct",
@@ -59,19 +41,10 @@ export const inputTypeMapForEntry: { [key in TypeTagEnum]: string } = {
 };
 
 /* eslint no-fallthrough: ["error", { "commentPattern": "fall-through" }] */
-
-export function toInputTypeString(
-  typeTags: Array<TypeTag>,
-  viewFunction: boolean,
-  asClassField = false,
-): string {
-  const mapping = viewFunction ? inputTypeMapForView : inputTypeMapForEntry;
+export function toInputTypeString(typeTags: Array<TypeTag>): string {
+  const mapping = inputTypeMapForEntry;
   const typeTag = typeTags[0];
-  let typeTagEnum = toTypeTagEnum(typeTag);
-  // if we're generating the class fields for a view function, we'll replace Option with Vector
-  if (asClassField && viewFunction && typeTagEnum === TypeTagEnum.Option) {
-    typeTagEnum = TypeTagEnum.Vector;
-  }
+  const typeTagEnum = toTypeTagEnum(typeTag);
   switch (typeTagEnum) {
     case TypeTagEnum.Vector:
       if (typeTags.length === 2 && typeTags[1].isU8()) {
@@ -79,15 +52,7 @@ export function toInputTypeString(
       }
     // fall-through
     case TypeTagEnum.Option:
-      if (viewFunction && !asClassField && typeTags.length === 2 && typeTags[1].isU8()) {
-        return "HexInput";
-      }
-      return [
-        mapping[typeTagEnum],
-        "<",
-        toInputTypeString(typeTags.slice(1), viewFunction, asClassField),
-        ">",
-      ].join("");
+      return [mapping[typeTagEnum], "<", toInputTypeString(typeTags.slice(1)), ">"].join("");
     case TypeTagEnum.Bool:
     case TypeTagEnum.U8:
     case TypeTagEnum.U16:
@@ -180,10 +145,11 @@ export function transformEntryFunctionInputTypes(
       // so we need to the value to an Array if it's an option:
       // new MoveVector(Array.from(arg[LETTER]).map(arg[LETTER + 1] => ...)
       const normalizedNameFromDepth = normalizeOptionNameFromDepth(isOption, nameFromDepth);
-      return `
+      const res = `
         new ${toClassString(newTypeTagEnum)}(${normalizedNameFromDepth}.map(${innerNameFromDepth} =>
-        ${transformEntryFunctionInputTypes(innerNameFromDepth, typeTags.slice(1), depth + 1)}
+        ${transformEntryFunctionInputTypes(innerNameFromDepth, typeTags.slice(1), depth + 1)})
         `;
+      return res;
     }
     case TypeTagEnum.AccountAddress:
       return `${toClassString(typeTagEnum)}.from(${nameFromDepth})${rParen}`;
@@ -198,53 +164,6 @@ export function transformEntryFunctionInputTypes(
       return `new ${toClassString(typeTagEnum)}(${nameFromDepth})${rParen}`;
     case TypeTagEnum.Generic:
       return fieldName;
-    default:
-      throw new Error(`Unknown typeTag: ${typeTag}`);
-  }
-}
-
-/**
- * The transformer function for converting constructor input types to view function JSON types.
- */
-export function transformViewFunctionInputTypes(
-  fieldName: string,
-  typeTags: Array<TypeTag>,
-  depth: number,
-): string {
-  // replace MoveObject with AccountAddress for the constructor input types
-  const typeTag =
-    typeTags[0].isStruct() && typeTags[0].isObject() ? new TypeTagAddress() : typeTags[0];
-  const nameFromDepth = depth === 0 ? `${fieldName}` : `arg${alphabetIndexToLetter(depth)}`;
-  const typeTagEnum = toTypeTagEnum(typeTag);
-  const rParen = R_PARENTHESIS.repeat(depth);
-  switch (typeTagEnum) {
-    case TypeTagEnum.Vector:
-    case TypeTagEnum.Option: {
-      // If we're at the inner-most type and it's a vector<u8>, we'll convert it to a Uint8Array
-      // and then a string.
-      if (typeTags.length === 2 && typeTags[1].isU8()) {
-        return `Hex.fromHexInput(${nameFromDepth}).toUint8Array()${rParen}`;
-      }
-      const innerNameFromDepth = `arg${alphabetIndexToLetter(depth + 1)}`;
-      return (
-        `${nameFromDepth}.map(${innerNameFromDepth} => ` +
-        `${transformViewFunctionInputTypes(innerNameFromDepth, typeTags.slice(1), depth + 1)}`
-      );
-    }
-    case TypeTagEnum.AccountAddress:
-      return `${toClassString(typeTagEnum)}.from(${nameFromDepth}).toString()${rParen}`;
-    case TypeTagEnum.Bool:
-    case TypeTagEnum.U8:
-    case TypeTagEnum.U16:
-    case TypeTagEnum.U32:
-    case TypeTagEnum.String:
-      return `${nameFromDepth}${rParen}`;
-    case TypeTagEnum.U64:
-    case TypeTagEnum.U128:
-    case TypeTagEnum.U256:
-      return `BigInt(${nameFromDepth}).toString()${rParen}`;
-    case TypeTagEnum.Generic:
-      return inputTypeMapForView[typeTagEnum];
     default:
       throw new Error(`Unknown typeTag: ${typeTag}`);
   }

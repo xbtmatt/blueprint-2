@@ -156,6 +156,11 @@ export type ABIGeneratedCodeMap = Record<string, ABIGeneratedCode>;
 
 export type MoveObject = AccountAddress;
 
+export type DocumentationOptions = {
+  displayFunctionSignature: boolean;
+  fullStructNames: boolean;
+};
+
 export type CodeGeneratorOptions = {
   moduleAddress: AccountAddress;
   moduleName: string;
@@ -168,10 +173,7 @@ export type CodeGeneratorOptions = {
   returnValue: Array<string>;
   suppliedFieldNames?: Array<string>;
   visibility: "public" | "private";
-  documentation?: {
-    displayFunctionSignature?: boolean;
-    fullStructNames?: boolean;
-  };
+  documentation?: DocumentationOptions;
   structArgs: boolean;
   passInModuleAddress: boolean;
 };

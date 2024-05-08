@@ -35,6 +35,8 @@ async function main() {
             AccountAddress.ONE,
             AccountAddress.THREE,
             AccountAddress.FOUR,
+            AccountAddress.from("0xa2775749a727b0c71adeb8c45dac5c59b1c370f97fba70a5f3e789a96a76d5b0"),
+            AccountAddress.from("0x4cba8c2b7f78052a6d5d67999620fecc77ea3d691d07f2c787151f9864b0b6a8"),
         ],
         "",
         "local"

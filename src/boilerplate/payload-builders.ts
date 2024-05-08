@@ -4,8 +4,6 @@ import {
   type AccountAddress,
   EntryFunction,
   type EntryFunctionArgumentTypes,
-  Identifier,
-  ModuleId,
   MultiSig,
   TransactionPayloadEntryFunction,
   type TypeTag,
@@ -13,15 +11,17 @@ import {
   type UserTransactionResponse,
   type WaitForTransactionOptions,
   Serializable,
-  type Serializer,
+  Serializer,
   type EntryFunctionPayloadResponse,
   type AnyRawTransaction,
   AccountAuthenticator,
-  type SimpleEntryFunctionArgumentTypes,
   type InputViewFunctionData,
   TransactionPayloadMultiSig,
   MultiSigTransactionPayload,
   type MoveValue,
+  postAptosFullNode,
+  MimeType,
+  type AptosConfig,
 } from "@aptos-labs/ts-sdk";
 import { type WalletSignTransactionFunction } from "./types";
 
@@ -167,9 +167,9 @@ export abstract class EntryFunctionPayloadBuilder extends Serializable {
   createPayload(
     multisigAddress?: AccountAddress,
   ): TransactionPayloadEntryFunction | TransactionPayloadMultiSig {
-    const entryFunction = new EntryFunction(
-      new ModuleId(this.moduleAddress, new Identifier(this.moduleName)),
-      new Identifier(this.functionName),
+    const entryFunction = EntryFunction.build(
+      `${this.moduleAddress.toString()}::${this.moduleName}`,
+      this.functionName,
       this.typeTags,
       this.argsToArray(),
     );
@@ -212,15 +212,42 @@ export abstract class ViewFunctionPayloadBuilder<T extends Array<MoveValue>> {
   }
 
   async submit(args: { aptos: Aptos; options?: LedgerVersionArg }): Promise<T> {
+    const entryFunction = EntryFunction.build(
+      `${this.moduleAddress.toString()}::${this.moduleName}`,
+      this.functionName,
+      this.typeTags,
+      this.argsToArray(),
+    );
     const { aptos, options } = args;
-    const viewRequest = await aptos.view<T>({
-      payload: this.toPayload(),
+    const viewRequest = await postBCSViewFunction<T>({
+      aptosConfig: aptos.config,
+      payload: entryFunction,
       options,
     });
     return viewRequest;
   }
 
-  argsToArray(): Array<SimpleEntryFunctionArgumentTypes> {
+  argsToArray(): Array<EntryFunctionArgumentTypes> {
     return Object.keys(this.args).map((field) => this.args[field as keyof typeof this.args]);
   }
+}
+
+export async function postBCSViewFunction<T extends Array<MoveValue>>(args: {
+  aptosConfig: AptosConfig;
+  payload: EntryFunction;
+  options?: LedgerVersionArg;
+}): Promise<T> {
+  const { aptosConfig, payload, options } = args;
+  const serializer = new Serializer();
+  payload.serialize(serializer);
+  const bytes = serializer.toUint8Array();
+  const { data } = await postAptosFullNode<Uint8Array, MoveValue[]>({
+    aptosConfig,
+    path: "view",
+    originMethod: "view",
+    contentType: MimeType.BCS_VIEW_FUNCTION,
+    params: { ledger_version: options?.ledgerVersion },
+    body: bytes,
+  });
+  return data as T;
 }

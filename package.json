@@ -18,17 +18,16 @@
   },
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "npm run clean && tsc",
-    "dev": "npm run build && node dist/index.js",
-    "gen": "npm run build && node dist/index.js",
-    "jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "dev-esm": "ts-node --esm index.ts",
+    "build": "pnpm run clean && tsc",
+    "dev": "tsx index.ts",
+    "gen": "pnpm run build && tsx index.ts",
+    "jest": "tsx --experimental-vm-modules node_modules/jest/bin/jest",
     "fast": "tsx index.ts",
-    "publish": "npm run build && node dist/tests/publish.js",
+    "publish": "pnpm run build && tsx dist/tests/publish.ts",
     "_fmt": "prettier 'generated/**/*.ts' 'src/*.ts' 'src/**/*.ts' 'tests/*.ts' 'tests/**/*.ts'",
     "fmt": "pnpm _fmt --write",
     "lint": "pnpm eslint 'src/**/*.ts' 'tests/*.ts' 'tests/**/*.ts'",
-    "prepublish": "npm run build && npm publish"
+    "prepublish": "pnpm run build && pnpm publish"
   },
   "files": [
     "dist"
@@ -62,7 +61,7 @@
     "eslint-plugin-unused-imports": "^3.1.0",
     "prettier": "^3.2.5",
     "ts-node": "^10.9.2",
-    "tsx": "^4.7.2"
+    "tsx": "^4.9.3"
   },
   "repository": {
     "type": "git",
@@ -71,5 +70,6 @@
   "homepage": "https://github.com/aptos-labs/blueprint/blob/main/README.md",
   "bugs": {
     "url": "https://github.com/aptos-labs/blueprint/issues"
-  }
+  },
+  "packageManager": "pnpm@9.1.0+sha512.67f5879916a9293e5cf059c23853d571beaf4f753c707f40cb22bed5fb1578c6aad3b6c4107ccb3ba0b35be003eb621a16471ac836c87beb53f9d54bb4612724"
 }

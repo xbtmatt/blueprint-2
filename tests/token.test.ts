@@ -125,7 +125,6 @@ describe("aptos token tests", () => {
     await fundAccounts(aptos, [creator]);
 
     await AptosTokenObjects.AptosToken.CreateCollection.submit({
-      moduleAddress: AccountAddress.FOUR,
       aptosConfig: aptos.config,
       creator,
       description: collectionDescription,
@@ -154,7 +153,6 @@ describe("aptos token tests", () => {
     ];
 
     const { version } = await AptosTokenObjects.AptosToken.Mint.submit({
-      moduleAddress: AccountAddress.FOUR,
       aptosConfig: aptos.config,
       creator,
       collection: collectionName,
@@ -226,7 +224,6 @@ describe("aptos token tests", () => {
   it("updates the token's property map values", async () => {
     const newAge = 32;
     await AptosTokenObjects.AptosToken.UpdateProperty.submit({
-      moduleAddress: AccountAddress.FOUR,
       aptosConfig: aptos.config,
       creator,
       token: tokens[0],
@@ -238,7 +235,6 @@ describe("aptos token tests", () => {
 
     const over9000 = 9001;
     await AptosTokenObjects.AptosToken.UpdateProperty.submit({
-      moduleAddress: AccountAddress.FOUR,
       aptosConfig: aptos.config,
       creator,
       token: tokens[0],
@@ -250,7 +246,6 @@ describe("aptos token tests", () => {
 
     const newAliveStatus = false;
     const { version } = await AptosTokenObjects.AptosToken.UpdateTypedProperty.submit({
-      moduleAddress: AccountAddress.FOUR,
       aptosConfig: aptos.config,
       creator,
       token: tokens[0],
