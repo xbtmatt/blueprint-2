@@ -1,0 +1,74 @@
+// import { type MoveFunctionVisibility, TypeTagAddress, parseTypeTag } from "@aptos-labs/ts-sdk";
+// import { type AnnotatedBCSArgument, type DocumentationOptions, TypeTagEnum } from "src/types";
+// import { toInputTypeString, toViewFunctionReturnTypeString } from "../conversions";
+// import { toClassString, toFlattenedTypeTag } from "../typeTags";
+// import { type ConfigDictionary } from "../config";
+
+// export type AddDocumentationProps = {
+//   codeGeneratorConfig: ConfigDictionary;
+//   input: Array<string>;
+//   visibility: MoveFunctionVisibility;
+//   functionName: string;
+//   genericTypeTagsString: string;
+//   returnValue: Array<string>;
+//   oneOrMoreGenerics: boolean;
+//   functionArguments: Array<AnnotatedBCSArgument>;
+//   documentationOptions?: DocumentationOptions;
+// };
+
+// // I think this should all be in the CodeGenerator class as class functions, with all of these variables
+// // stored in fields in the class.
+// // And then when you actually write this, separate it out into a different file.
+
+// export const addDocumentation = (args: AddDocumentationProps) => {
+//   const {
+//     codeGeneratorConfig,
+//     input,
+//     visibility,
+//     functionName,
+//     genericTypeTagsString,
+//     returnValue,
+//     oneOrMoreGenerics,
+//     functionArguments,
+//     documentationOptions,
+//   } = args;
+
+//   const leftCaret = oneOrMoreGenerics ? "<" : "";
+//   const rightCaret = oneOrMoreGenerics ? ">" : "";
+//   const extraDocLine = "*```";
+
+//   const funcSignatureLines = new Array<string>();
+//   if (documentationOptions?.displayFunctionSignature) {
+//     const viewFunctionAnnotation = viewFunction ? "\n*  #[view]" : "";
+//     funcSignatureLines.push(`/**\n${extraDocLine}${viewFunctionAnnotation}`);
+//     funcSignatureLines.push(
+//       `*  ${visibility === "public" ? visibility : ""}${viewFunction ? "" : " entry"}` +
+//         ` fun ${functionName}${leftCaret}${genericTypeTagsString}${rightCaret}(${
+//           functionArguments.length > 0 ? "" : `)${returnValueAsString}`
+//         }`,
+//     );
+//     signerArguments.forEach((signerArgument, i) => {
+//       funcSignatureLines.push(
+//         `*     ${signerArgumentNamesSnakeCase[i]}: ${signerArgument.annotation},`,
+//       );
+//     });
+//     functionArguments.forEach((functionArgument, i) => {
+//       funcSignatureLines.push(`*     ${fieldNames[i]}: ${functionArgument.annotation},`);
+//     });
+//     const endParenthesis = functionArguments.length > 0 ? `*  )${returnValueAsString}\n` : "";
+//     funcSignatureLines.push(`${endParenthesis}${extraDocLine}\n**/`);
+//   }
+//   const functionSignature = funcSignatureLines.join("\n");
+//   lines.push(functionSignature);
+
+//   const accountAddressInputString = toInputTypeString([new TypeTagAddress()], viewFunction);
+//   const accountAddressClassString = toClassString(TypeTagEnum.AccountAddress);
+
+//   const returnTypes = returnValue.map((v) => {
+//     const typeTag = parseTypeTag(v, { allowGenerics: true });
+//     const flattenedTypeTag = toFlattenedTypeTag(typeTag);
+//     const inputType = toViewFunctionReturnTypeString(flattenedTypeTag);
+//     return inputType;
+//   });
+//   const viewFunctionReturnTypes = viewFunction ? `<[${returnTypes.map((v) => v).join(", ")}]>` : "";
+// };

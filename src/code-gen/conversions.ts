@@ -48,6 +48,7 @@ export function toInputTypeString(typeTags: Array<TypeTag>): string {
   switch (typeTagEnum) {
     case TypeTagEnum.Vector:
       if (typeTags.length === 2 && typeTags[1].isU8()) {
+        // TODO: Allow Array<number>. Sometimes it truly is just an array of (small) numbers.
         return "HexInput";
       }
     // fall-through

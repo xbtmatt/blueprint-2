@@ -1,5 +1,5 @@
 import {
-  type Aptos,
+  Aptos,
   Account,
   type AccountAddress,
   EntryFunction,
@@ -45,8 +45,8 @@ export class EntryFunctionTransactionBuilder {
 
   /**
    *
-   * @param signer a local Account or a callback function that returns an AccountAuthenticator
-   * @param asFeePayer whether or not the signer is the fee payer
+   * @param signer a local Account or a callback function that returns an AccountAuthenticator.
+   * @param asFeePayer whether or not the signer is the fee payer.
    * @returns a Promise<AccountAuthenticator>
    */
   async sign(
@@ -118,12 +118,17 @@ export class EntryFunctionTransactionBuilder {
   }
 
   /**
-   * Helper function to print out relevant transaction info with an easy way to filter out fields
-   * @param response The transaction response for a user submitted transaction
-   * @param optionsArray An array of keys to print out from the transaction response
-   * @returns the transaction info as an object
+   * Helper function to print out relevant transaction info with an easy way to filter out fields.
+   *
+   * These are intended to be chained declaratively. For example:
+   *    const response = await builder.submit(...).responseInfo(["hash", "success"]);
+   *
+   * @param response The transaction response for a user submitted transaction.
+   * @param optionsArray An array of keys to print out from the transaction response.
+   * @returns the transaction info as an object.
    */
-  static responseInfo(
+  /* eslint-disable-next-line class-methods-use-this */ // This is intended to be chained.
+  responseInfo(
     response: UserTransactionResponse,
     optionsArray?: Array<keyof UserTransactionResponse>,
   ) {
@@ -211,7 +216,7 @@ export abstract class ViewFunctionPayloadBuilder<T extends Array<MoveValue>> {
     };
   }
 
-  async submit(args: { aptos: Aptos; options?: LedgerVersionArg }): Promise<T> {
+  async submit(args: { aptos: Aptos | AptosConfig; options?: LedgerVersionArg }): Promise<T> {
     const entryFunction = EntryFunction.build(
       `${this.moduleAddress.toString()}::${this.moduleName}`,
       this.functionName,
@@ -220,7 +225,7 @@ export abstract class ViewFunctionPayloadBuilder<T extends Array<MoveValue>> {
     );
     const { aptos, options } = args;
     const viewRequest = await postBCSViewFunction<T>({
-      aptosConfig: aptos.config,
+      aptosConfig: aptos,
       payload: entryFunction,
       options,
     });
@@ -232,12 +237,17 @@ export abstract class ViewFunctionPayloadBuilder<T extends Array<MoveValue>> {
   }
 }
 
+export function toConfig(aptos: Aptos | AptosConfig): AptosConfig {
+  return aptos instanceof Aptos ? aptos.config : aptos;
+}
+
 export async function postBCSViewFunction<T extends Array<MoveValue>>(args: {
-  aptosConfig: AptosConfig;
+  aptosConfig: Aptos | AptosConfig;
   payload: EntryFunction;
   options?: LedgerVersionArg;
 }): Promise<T> {
-  const { aptosConfig, payload, options } = args;
+  const { payload, options } = args;
+  const aptosConfig = toConfig(args.aptosConfig);
   const serializer = new Serializer();
   payload.serialize(serializer);
   const bytes = serializer.toUint8Array();

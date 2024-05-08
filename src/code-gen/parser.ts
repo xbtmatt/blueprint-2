@@ -230,9 +230,9 @@ export class CodeGenerator {
       const inputType = toViewFunctionReturnTypeString(flattenedTypeTag);
       return inputType;
     });
-    const viewFunctionReturnTypes = viewFunction
-      ? `<[${returnTypes.map((v) => v).join(", ")}]>`
-      : "";
+
+    // Automatically unpack the return type if there's only one, otherwise return it as a tuple.
+    const returnTypesAsString = viewFunction ? `<[${returnTypes.map((v) => v).join(", ")}]>` : "";
 
     // ---------- Class fields ---------- //
     const entryOrView = viewFunction ? "View" : "Entry";
@@ -240,7 +240,7 @@ export class CodeGenerator {
     const moduleAddressFieldValue = passInModuleAddress
       ? ": AccountAddress"
       : ` = ${MODULE_ADDRESS_VAR_NAME}`;
-    const extendsString = `extends ${entryOrView}FunctionPayloadBuilder${viewFunctionReturnTypes}`;
+    const extendsString = `extends ${entryOrView}FunctionPayloadBuilder${returnTypesAsString}`;
     const classFields = `
     export class ${className} ${extendsString} {
       public readonly moduleAddress${moduleAddressFieldValue};
@@ -415,6 +415,18 @@ export class CodeGenerator {
           genericTypeTagsStringAnnotation,
         ),
       );
+    } else {
+      lines.push(
+        this.createStaticViewSubmit(
+          className,
+          functionArguments,
+          casedFieldNames,
+          genericTypeTags,
+          explicitTypeTagInputs,
+          genericTypeTagsStringAnnotation,
+          returnTypes,
+        ),
+      );
     }
     lines.push("\n } \n");
     return lines.join("\n");
@@ -557,7 +569,7 @@ export class CodeGenerator {
       signerArguments.push({
         typeTagArray: [new TypeTagAddress()],
         classString: toClassString(TypeTagEnum.Signer),
-        annotation: "sender for the payload, not used in the entry function as an argument",
+        annotation: "Sender for the payload, not used in the entry function as an argument.",
       });
       signerArgumentNames.push(PRIMARY_SENDER_VAR_NAME);
     }
@@ -574,7 +586,8 @@ export class CodeGenerator {
       constructorOtherArgs.push(`${casedFieldNames[i]}: ${inputType}, ${argComment}`);
     });
     constructorOtherArgs.push(
-      `feePayer?: ${signerInputString}, // optional fee payer account to sponsor the transaction`,
+      // TODO: Is this ever used?
+      `feePayer?: ${signerInputString}, // Optional fee payer account to sponsor the transaction`,
     );
 
     const withSecondarySenders = signerArguments.length > 1;
@@ -660,6 +673,66 @@ export class CodeGenerator {
       "}\n";
 
     return transactionBuilderHelperString;
+  }
+
+  createStaticViewSubmit(
+    className: string,
+    functionArguments: Array<AnnotatedBCSArgument>,
+    casedFieldNames: Array<string>,
+    // Parsed generic names if they're available, we only use them for counting.
+    genericTypeTags: Array<string>,
+    explicitTypeTagInputs: string,
+    genericTypeTagAnnotation: string,
+    returnTypes: Array<string>,
+  ): string {
+    const constructorFunctionArgs = new Array<string>();
+
+    functionArguments.forEach((functionArgument, i) => {
+      const inputType = toInputTypeString(functionArgument.typeTagArray);
+      const argComment = ` // ${functionArgument.annotation}`;
+      constructorFunctionArgs.push(`${casedFieldNames[i]}: ${inputType}, ${argComment}`);
+    });
+    const withTypeTags = genericTypeTags.length > 0;
+    const submitFunctionArgsWithConfig = `aptos: Aptos | AptosConfig,\n${
+      this.config.passInModuleAddress ? "moduleAddress: AccountAddressInput,\n" : ""
+    }${constructorFunctionArgs.join("\n") + (constructorFunctionArgs.length > 0 ? "\n" : "")}${
+      withTypeTags ? `typeTags: ${explicitTypeTagInputs}, ${genericTypeTagAnnotation}\n` : ""
+    }options?: LedgerVersionArg,\n`;
+
+    let submitFunctionSignature: string;
+    let submitConstructorArgs: string;
+    let submitFunctionArgs: string;
+    if (this.config.structArgs) {
+      const argsVar = CONSTRUCTOR_ARGS_VARIABLE_NAME;
+      submitFunctionSignature = `${argsVar}: { ${submitFunctionArgsWithConfig} }`;
+      const numAllOtherArguments = functionArguments.length + genericTypeTags.length;
+      submitConstructorArgs = numAllOtherArguments >= 1 ? argsVar : "";
+      submitFunctionArgs = argsVar;
+    } else {
+      // Remove `aptos` and `options` from the submitFunctionArgs to get the constructor args.
+      submitConstructorArgs = submitFunctionArgsWithConfig.split("\n").slice(1, -1).join("\n");
+      submitFunctionSignature = `\n${submitFunctionArgsWithConfig}\n`;
+      submitFunctionArgs = submitFunctionArgsWithConfig;
+    }
+    const [a, b, c] = [className, submitConstructorArgs, submitFunctionArgs];
+    const awaitNewClassAndSubmit = `await new ${a}(${b}).submit(${c})`;
+
+    // Automatically unpack the return type if there's only one, otherwise return it as a tuple.
+    const resTuple = returnTypes.length === 1 ? "[ res ]" : "res";
+    let returnTypesAsString: string;
+    if (returnTypes.length === 1) {
+      returnTypesAsString = `<${returnTypes[0]}>`;
+    } else {
+      returnTypesAsString = `<[${returnTypes.map((v) => v).join(", ")}]>`;
+    }
+
+    const transactionBuilderFunctionSignature =
+      `static async submit(${submitFunctionSignature}): Promise${returnTypesAsString} {\n` +
+      `  const ${resTuple} = ${awaitNewClassAndSubmit};\n` +
+      "  return res;\n" +
+      "}\n";
+
+    return transactionBuilderFunctionSignature;
   }
 
   getClassArgTypes(
