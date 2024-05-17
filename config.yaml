@@ -7,9 +7,9 @@ namedAddresses:
   "0x7e783b349d3e89cf5931af376ebeadbfab855b3fa239b7ada8f5a92fbea6b387": pyth
   "0x7d7e436f0b2aafde60774efb26ccc432cf881b677aca7faaf2a01879bd19fb8": switchboard
   "0xc0deb00c405f84c85dc13442e305df75d1288100cdd82675695f6148c7ece51c": econia
-  "0x4cba8c2b7f78052a6d5d67999620fecc77ea3d691d07f2c787151f9864b0b6a8": emojicoin_dot_fun
+  "0x4bab58978ec1b1bef032eeb285ad47a6a9b997d646c19b598c35f46b26ff9ece": emojicoin_dot_fun
 sourceCodePath:
-  "0x4cba8c2b7f78052a6d5d67999620fecc77ea3d691d07f2c787151f9864b0b6a8": "/home/dev/emojicoin/src/move/emojicoin_dot_fun/sources/"
+  "0x4bab58978ec1b1bef032eeb285ad47a6a9b997d646c19b598c35f46b26ff9ece": "/home/dev/emojicoin/src/move/emojicoin_dot_fun/sources/"
   "0x1": "/home/dev/aptos/aptos-core-1/aptos-move/framework/aptos_framework/sources/"
   "0x3": "/home/dev/aptos/aptos-core-1/aptos-move/framework/aptos_token/sources/"
   "0x4": "/home/dev/aptos/aptos-core-1/aptos-move/framework/aptos_token_objects/sources/"
